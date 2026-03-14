@@ -1,20 +1,20 @@
 # evacuation_main.py
+import argparse
 import csv
 import os
-import random
 import numpy as np
 import matplotlib.pyplot as plt
 import config
+
 try:
     import osmnx as ox
     from shapely.geometry import Point
 except Exception:
     ox = None
     Point = None
-from evac_env import EvacEnv
-from agents.ped_agent import PedAgent
-from agents.car_agent import CarAgent
-from agents.shuttle_agent import ShuttleAgent, build_shuttle_route
+
+from batch_runner import run_single_simulation, run_batch
+from scenario_loader import load_scenario
 from transit_stops import fetch_shuttle_stops
 
 
@@ -47,6 +47,18 @@ def _draw_bus_routes(env, buses, color="#ff6b6b", alpha=0.35):
             plt.plot(xs, ys, color=color, linewidth=1.2, alpha=alpha, zorder=2)
 
 
+def _hazard_edge_style(env, u, v):
+    show_hazard = getattr(config, "EVAC_SHOW_HAZARD_OVERLAY", True)
+    snow_cmap = plt.get_cmap("Blues")
+    if (u, v) in env.blocked_edges_walk:
+        return "#b33939", 1.2, 0.9
+    snow = env.snow_depth_walk.get((u, v), 0.0)
+    snow = max(0.0, min(1.0, float(snow)))
+    if show_hazard and snow > 0.02:
+        return snow_cmap(0.35 + 0.6 * snow), 0.6 + 1.6 * snow, 0.2 + 0.6 * snow
+    return "#2f333a", 0.7, 0.7
+
+
 def _init_plot(env, peds, cars, shuttles):
     fig, ax = plt.subplots()
     ax.set_facecolor("#0f1116")
@@ -59,27 +71,43 @@ def _init_plot(env, peds, cars, shuttles):
         plt.xlim(min(xs) - xpad, max(xs) + xpad)
         plt.ylim(min(ys) - ypad, max(ys) + ypad)
 
-    # edges
     if not stops_only:
+        edge_lines = {}
         for u, v in env.G_walk.edges():
             x1, y1 = env.pos[u]
             x2, y2 = env.pos[v]
-            color = "#2f333a"
-            if (u, v) in env.blocked_edges_walk:
-                color = "#b33939"
-            plt.plot([x1, x2], [y1, y2], color=color, linewidth=0.7, alpha=0.7)
+            color, width, alpha = _hazard_edge_style(env, u, v)
+            (line,) = plt.plot([x1, x2], [y1, y2], color=color, linewidth=width, alpha=alpha, zorder=1)
+            edge_lines[(u, v)] = line
+    else:
+        edge_lines = {}
 
-    # bus routes (static)
     if not stops_only:
         _draw_bus_routes(env, shuttles, color="#ff6b6b", alpha=0.35)
 
-    # shelters (static)
+    shelter_texts = {}
+    shelter_rank = sorted(list(env.shelters), key=lambda n: str(n))
     if not stops_only:
         for s in env.shelters:
             x, y = env.pos[s]
             plt.scatter([x], [y], c="#2ecc71", s=40, marker="P", zorder=5)
+            t = plt.text(x, y, "0", color="#c8f7c5", fontsize=8, ha="left", va="bottom", zorder=10)
+            shelter_texts[s] = t
+        panel = ax.text(
+            1.01,
+            0.98,
+            "",
+            transform=ax.transAxes,
+            va="top",
+            ha="left",
+            fontsize=8,
+            color="#d8f3dc",
+            family="monospace",
+            bbox={"facecolor": "#0b1020", "edgecolor": "#2a3448", "alpha": 0.85, "boxstyle": "round,pad=0.4"},
+        )
+    else:
+        panel = None
 
-    # transit stops (static)
     def _map_stops_to_xy(stops):
         pts = []
         for s in stops:
@@ -104,7 +132,6 @@ def _init_plot(env, peds, cars, shuttles):
     def _sample_points(points, min_dist_m):
         if not points:
             return []
-        # Projected coords are in meters; enforce minimum spacing.
         min_sq = min_dist_m * min_dist_m
         kept = []
         for x, y in points:
@@ -140,21 +167,22 @@ def _init_plot(env, peds, cars, shuttles):
             plt.xlim(min(xs_all) - xpad, max(xs_all) + xpad)
             plt.ylim(min(ys_all) - ypad, max(ys_all) + ypad)
 
-    # agents (dynamic)
-    ped_offsets = np.array([_agent_xy(env, a) for a in peds]) if peds else np.empty((0, 2))
-    car_offsets = np.array([_agent_xy(env, a) for a in cars]) if cars else np.empty((0, 2))
+    active_peds = [a for a in peds if not a.reached]
+    active_cars = [a for a in cars if not a.reached]
+    ped_offsets = np.array([_agent_xy(env, a) for a in active_peds]) if active_peds else np.empty((0, 2))
+    car_offsets = np.array([_agent_xy(env, a) for a in active_cars]) if active_cars else np.empty((0, 2))
     shuttle_offsets = np.array([_agent_xy(env, b) for b in shuttles]) if shuttles else np.empty((0, 2))
 
     if stops_only:
-        ped_scatter = plt.scatter([], [], c="#ffd166", s=18, marker="o")
-        car_scatter = plt.scatter([], [], c="#00b4d8", s=28, marker="^")
-        shuttle_scatter = plt.scatter([], [], c="#ff6b6b", s=46, marker="s")
+        ped_scatter = plt.scatter([], [], c="#ffd166", s=28, marker="o")
+        car_scatter = plt.scatter([], [], c="#00b4d8", s=40, marker="^")
+        shuttle_scatter = plt.scatter([], [], c="#ff6b6b", s=58, marker="s")
     else:
         ped_scatter = plt.scatter(
             ped_offsets[:, 0] if ped_offsets.size else [],
             ped_offsets[:, 1] if ped_offsets.size else [],
-            c=["#ffd166" if not a.reached else "#7f8c8d" for a in peds],
-            s=18,
+            c="#ffd166",
+            s=28,
             marker="o",
             edgecolors="#1a1a1a",
             linewidths=0.4,
@@ -163,8 +191,8 @@ def _init_plot(env, peds, cars, shuttles):
         car_scatter = plt.scatter(
             car_offsets[:, 0] if car_offsets.size else [],
             car_offsets[:, 1] if car_offsets.size else [],
-            c=["#00b4d8" if not a.reached else "#95a5a6" for a in cars],
-            s=28,
+            c="#00b4d8",
+            s=40,
             marker="^",
             edgecolors="#1a1a1a",
             linewidths=0.4,
@@ -174,7 +202,7 @@ def _init_plot(env, peds, cars, shuttles):
             shuttle_offsets[:, 0] if shuttle_offsets.size else [],
             shuttle_offsets[:, 1] if shuttle_offsets.size else [],
             c="#ff6b6b",
-            s=46,
+            s=58,
             marker="s",
             edgecolors="#1a1a1a",
             linewidths=0.4,
@@ -184,14 +212,13 @@ def _init_plot(env, peds, cars, shuttles):
     title = ax.set_title("Evacuation Step 0", color="#e6e6e6", fontsize=12)
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.text(0.01, 0.01, "ped: ●  car: ▲  shuttle: ■  shelter: ✚  shuttle stop: ◆  blocked: red",
+    ax.text(0.01, 0.01, "ped: ●  car: ▲  shuttle: ■  shelter: ✚  shuttle stop: ◆  blocked: red  snow: blue",
             transform=ax.transAxes, fontsize=8, color="#cfd2d6", alpha=0.9)
 
     if not shuttle_xy:
         print("[stops] no stops plotted")
     else:
-        if shuttle_xy:
-            print(f"[stops] plotted shuttle stops: {len(shuttle_xy)}")
+        print(f"[stops] plotted shuttle stops: {len(shuttle_xy)}")
 
     return {
         "fig": fig,
@@ -200,6 +227,10 @@ def _init_plot(env, peds, cars, shuttles):
         "ped_scatter": ped_scatter,
         "car_scatter": car_scatter,
         "shuttle_scatter": shuttle_scatter,
+        "edge_lines": edge_lines,
+        "shelter_texts": shelter_texts,
+        "shelter_rank": shelter_rank,
+        "panel": panel,
     }
 
 
@@ -210,81 +241,143 @@ def _update_plot(env, peds, cars, shuttles, step, state):
         state["fig"].canvas.draw_idle()
         plt.pause(0.001)
         return
-    ped_offsets = np.array([_agent_xy(env, a) for a in peds]) if peds else np.empty((0, 2))
-    car_offsets = np.array([_agent_xy(env, a) for a in cars]) if cars else np.empty((0, 2))
+
+    hazard_draw_every = max(1, int(getattr(config, "EVAC_HAZARD_DRAW_EVERY", 3)))
+    if step % hazard_draw_every == 0 and state.get("edge_lines"):
+        for (u, v), line in state["edge_lines"].items():
+            color, width, alpha = _hazard_edge_style(env, u, v)
+            line.set_color(color)
+            line.set_linewidth(width)
+            line.set_alpha(alpha)
+
+    active_peds = [a for a in peds if not a.reached]
+    active_cars = [a for a in cars if not a.reached]
+    ped_offsets = np.array([_agent_xy(env, a) for a in active_peds]) if active_peds else np.empty((0, 2))
+    car_offsets = np.array([_agent_xy(env, a) for a in active_cars]) if active_cars else np.empty((0, 2))
     shuttle_offsets = np.array([_agent_xy(env, b) for b in shuttles]) if shuttles else np.empty((0, 2))
 
     state["ped_scatter"].set_offsets(ped_offsets)
     state["car_scatter"].set_offsets(car_offsets)
     state["shuttle_scatter"].set_offsets(shuttle_offsets)
-    state["ped_scatter"].set_color(["#ffd166" if not a.reached else "#7f8c8d" for a in peds])
-    state["car_scatter"].set_color(["#00b4d8" if not a.reached else "#95a5a6" for a in cars])
+    state["ped_scatter"].set_color("#ffd166")
+    state["car_scatter"].set_color("#00b4d8")
+
+    if state.get("shelter_texts"):
+        counts = {}
+        for a in peds + cars:
+            if a.reached:
+                s = a.node if a.node in state["shelter_texts"] else getattr(a, "target_shelter", None)
+                if s is not None:
+                    counts[s] = counts.get(s, 0) + 1
+        for s, txt in state["shelter_texts"].items():
+            txt.set_text(str(counts.get(s, 0)))
+        if state.get("panel") is not None:
+            lines = []
+            total_arrived_to_shelter = 0
+            for i, s in enumerate(state.get("shelter_rank", []), start=1):
+                c = counts.get(s, 0)
+                total_arrived_to_shelter += c
+                lines.append(f"S{i:02d}: {c:3d}")
+            total_reached = sum(1 for a in peds + cars if a.reached)
+            lines.append(f"Step: {step:4d}")
+            lines.append("-----")
+            lines.append(f"Shelter Total: {total_arrived_to_shelter:3d}")
+            lines.append(f"Reached Total: {total_reached:3d}")
+            state["panel"].set_text("\n".join(lines))
+
     state["title"].set_text(f"Evacuation Step {step}")
     state["fig"].canvas.draw_idle()
     plt.pause(0.001)
 
 
-def main():
-    env = EvacEnv()
-    peds = []
-    cars = []
-    shuttles = []
-    nodes_walk = list(env.G_walk.nodes())
-    nodes_drive = list(env.G_drive.nodes())
-    for i in range(config.EVAC_PED_COUNT):
-        start = random.choice(nodes_walk)
-        ped = PedAgent(i + 1, start, env)
-        ped.role = "faculty" if random.random() < config.EVAC_FACULTY_RATIO else "staff"
-        peds.append(ped)
-    for i in range(config.EVAC_CAR_COUNT):
-        start = random.choice(nodes_drive)
-        car = CarAgent(i + 1, start, env)
-        car.role = "faculty" if random.random() < config.EVAC_FACULTY_RATIO else "staff"
-        cars.append(car)
-    # shuttle buses
-    for i in range(config.EVAC_BUS_COUNT):
-        route, stops = build_shuttle_route(env)
-        print(f"[shuttle] route length for bus {i + 1}: {len(route)}")
-        if route:
-            shuttles.append(ShuttleAgent(i + 1, route[0], env, route, stops))
-
-    shelters = list(env.shelters)
-    shelters_drive = [s for s in shelters if s in env.G_drive]
-    if not shelters_drive:
-        shelters_drive = nodes_drive[:]
-
-    os.makedirs("logs", exist_ok=True)
-    metrics_path = os.path.join("logs", "phase1_evac_metrics.csv")
-    with open(metrics_path, "w", newline="") as f:
+def _write_step_csv(path, step_rows):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["step", "alive", "reached", "avg_exposure"])
+        for row in step_rows:
+            w.writerow([row["step"], row["alive"], row["reached"], f"{row['avg_exposure']:.3f}"])
 
+
+def main():
+    parser = argparse.ArgumentParser(description="Campus evacuation simulation")
+    parser.add_argument("--mode", choices=["interactive", "batch"], default="interactive")
+    parser.add_argument("--scenario", default="scenarios/enterprise_baseline.json")
+    parser.add_argument("--policy", default="round_robin")
+    parser.add_argument("--output-dir", default="logs")
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--no-plot", action="store_true")
+    parser.add_argument("--visual-speed-scale", type=float, default=6.0)
+    parser.add_argument("--log-every", type=int, default=5)
+    args = parser.parse_args()
+
+    scenario = load_scenario(args.scenario)
+
+    if args.mode == "batch":
+        runs_csv, summary_json, management_txt, policy_summary = run_batch(scenario, args.output_dir)
+        print(f"[batch] runs csv: {runs_csv}")
+        print(f"[batch] summary json: {summary_json}")
+        print(f"[batch] management summary: {management_txt}")
+        for policy_name, summary in policy_summary.items():
+            print(f"[batch] {policy_name}: {summary}")
+        return
+
+    seed = args.seed if args.seed is not None else int(scenario.get("base_seed", 42))
+    draw = not args.no_plot
+    hooks = None
+    if draw:
         plt.ion()
-        plot_state = _init_plot(env, peds, cars, shuttles)
-        for step in range(config.EVAC_STEP_LIMIT):
-            for a in peds:
-                if not shelters:
-                    break
-                goal = shelters[a.id % len(shelters)]
-                a.step(goal)
-            for a in cars:
-                if not shelters_drive:
-                    break
-                goal = shelters_drive[a.id % len(shelters_drive)]
-                a.step(goal)
-            for b in shuttles:
-                b.step()
+        hooks = {
+            "init": _init_plot,
+            "update": _update_plot,
+            "finalize": lambda: (plt.ioff(), plt.show()),
+        }
 
-            alive = sum(1 for a in peds + cars if a.alive)
-            reached = sum(1 for a in peds + cars if a.reached)
-            avg_exp = sum(a.exposure for a in peds + cars) / max(1, (len(peds) + len(cars)))
-            w.writerow([step, alive, reached, f"{avg_exp:.3f}"])
+    config_overrides = dict(scenario.get("config_overrides", {}))
+    if draw and args.visual_speed_scale != 1.0:
+        config_overrides["EVAC_SPEED_WALK"] = float(config_overrides.get("EVAC_SPEED_WALK", config.EVAC_SPEED_WALK)) * args.visual_speed_scale
+        config_overrides["EVAC_SPEED_CAR"] = float(config_overrides.get("EVAC_SPEED_CAR", config.EVAC_SPEED_CAR)) * args.visual_speed_scale
+        config_overrides["EVAC_SPEED_BUS"] = float(config_overrides.get("EVAC_SPEED_BUS", config.EVAC_SPEED_BUS)) * args.visual_speed_scale
 
-            if step % config.EVAC_DRAW_EVERY == 0:
-                _update_plot(env, peds, cars, shuttles, step, plot_state)
+    metrics_path = os.path.join(args.output_dir, "phase1_evac_metrics.csv")
+    os.makedirs(args.output_dir, exist_ok=True)
+    metrics_file = open(metrics_path, "w", newline="", encoding="utf-8")
+    w = csv.writer(metrics_file)
+    w.writerow(["step", "alive", "reached", "avg_exposure"])
 
-        plt.ioff()
-        plt.show()
+    def _on_step(row):
+        w.writerow([row["step"], row["alive"], row["reached"], f"{row['avg_exposure']:.3f}"])
+        if row["step"] == -1:
+            print(
+                f"[step   -1] alive={row['alive']:3d} "
+                f"reached={row['reached']:3d} avg_exposure={row['avg_exposure']:.3f}",
+                flush=True,
+            )
+        elif args.log_every > 0 and row["step"] % args.log_every == 0:
+            print(
+                f"[step {row['step']:4d}] alive={row['alive']:3d} "
+                f"reached={row['reached']:3d} avg_exposure={row['avg_exposure']:.3f}",
+                flush=True,
+            )
+
+    try:
+        step_rows, summary = run_single_simulation(
+            scenario_name=scenario.get("name", "interactive"),
+            config_overrides=config_overrides,
+            seed=seed,
+            policy_name=args.policy,
+            draw=draw,
+            draw_hooks=hooks,
+            step_callback=_on_step,
+            emit_initial_state=True,
+        )
+    finally:
+        metrics_file.close()
+
+    if not step_rows:
+        _write_step_csv(metrics_path, step_rows)
+    print(f"[interactive] step metrics: {metrics_path}")
+    print(f"[interactive] summary: {summary}")
 
 
 if __name__ == "__main__":

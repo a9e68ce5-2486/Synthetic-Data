@@ -1,0 +1,10 @@
+Management Summary
+Scenario: enterprise_blizzard_mid
+Baseline Policy: round_robin
+
+For scenario 'enterprise_blizzard_mid', best policy is 'nearest': reached rate improvement vs 'round_robin' = 1191.8%, exposure improvement = 4.0%, T95 not available.
+
+Policy Snapshot:
+- round_robin: runs=3, avg_reached_rate=0.0061, avg_alive_rate=1.0, avg_exposure_total=203.028, avg_t95_step=None
+- nearest: runs=3, avg_reached_rate=0.0788, avg_alive_rate=1.0, avg_exposure_total=195.2986, avg_t95_step=None
+- priority_faculty: runs=3, avg_reached_rate=0.0364, avg_alive_rate=1.0, avg_exposure_total=200.0489, avg_t95_step=None

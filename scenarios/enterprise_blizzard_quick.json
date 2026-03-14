@@ -1,0 +1,21 @@
+{
+  "name": "enterprise_blizzard_quick",
+  "description": "Fast smoke scenario for development checks.",
+  "disaster_type": "blizzard",
+  "baseline_policy": "round_robin",
+  "profile": "blizzard",
+  "num_runs": 3,
+  "base_seed": 20260227,
+  "policies": [
+    "round_robin",
+    "nearest",
+    "priority_faculty"
+  ],
+  "config_overrides": {
+    "EVAC_USE_OSM": false,
+    "EVAC_PED_COUNT": 20,
+    "EVAC_CAR_COUNT": 8,
+    "EVAC_BUS_COUNT": 0,
+    "EVAC_STEP_LIMIT": 200
+  }
+}

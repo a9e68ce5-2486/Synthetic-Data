@@ -1,0 +1,15 @@
+{
+  "name": "compound_profile",
+  "disaster_type": "compound",
+  "description": "Compound event: structural damage plus snow/visibility constraints.",
+  "config_overrides": {
+    "EVAC_BLOCK_PROB": 0.28,
+    "EVAC_SNOW_MIN": 0.3,
+    "EVAC_SNOW_MAX": 1.0,
+    "EVAC_SLOPE_ALPHA": 0.85,
+    "EVAC_SNOW_ALPHA": 1.6,
+    "EVAC_OBS_RADIUS_M": 45.0,
+    "EVAC_OBS_ERROR_WALK": 0.25,
+    "EVAC_OBS_ERROR_DRIVE": 0.25
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "scenario": "enterprise_blizzard_mid",
+  "num_runs": 3,
+  "base_seed": 20260227,
+  "policies": [
+    "round_robin",
+    "nearest",
+    "priority_faculty"
+  ],
+  "policy_summary": {
+    "round_robin": {
+      "runs": 3,
+      "avg_reached_rate": 0.0061,
+      "avg_alive_rate": 1.0,
+      "avg_exposure_total": 203.028,
+      "avg_t95_step": null
+    },
+    "nearest": {
+      "runs": 3,
+      "avg_reached_rate": 0.0788,
+      "avg_alive_rate": 1.0,
+      "avg_exposure_total": 195.2986,
+      "avg_t95_step": null
+    },
+    "priority_faculty": {
+      "runs": 3,
+      "avg_reached_rate": 0.0364,
+      "avg_alive_rate": 1.0,
+      "avg_exposure_total": 200.0489,
+      "avg_t95_step": null
+    }
+  }
+}

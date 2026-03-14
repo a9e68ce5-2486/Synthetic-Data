@@ -1,0 +1,15 @@
+{
+  "name": "blizzard_profile",
+  "disaster_type": "blizzard",
+  "description": "Heavy snow and reduced mobility with moderate road closures.",
+  "config_overrides": {
+    "EVAC_BLOCK_PROB": 0.12,
+    "EVAC_SNOW_MIN": 0.4,
+    "EVAC_SNOW_MAX": 1.0,
+    "EVAC_SLOPE_ALPHA": 0.75,
+    "EVAC_SNOW_ALPHA": 1.5,
+    "EVAC_OBS_RADIUS_M": 50.0,
+    "EVAC_OBS_ERROR_WALK": 0.2,
+    "EVAC_OBS_ERROR_DRIVE": 0.1
+  }
+}

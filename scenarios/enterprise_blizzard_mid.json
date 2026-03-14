@@ -1,0 +1,20 @@
+{
+  "name": "enterprise_blizzard_mid",
+  "description": "Mid-speed scenario: keep OSM realism with fewer Monte Carlo runs.",
+  "disaster_type": "blizzard",
+  "baseline_policy": "round_robin",
+  "profile": "blizzard",
+  "num_runs": 3,
+  "base_seed": 20260227,
+  "policies": [
+    "round_robin",
+    "nearest",
+    "priority_faculty"
+  ],
+  "config_overrides": {
+    "EVAC_PED_COUNT": 40,
+    "EVAC_CAR_COUNT": 15,
+    "EVAC_BUS_COUNT": 8,
+    "EVAC_STEP_LIMIT": 400
+  }
+}

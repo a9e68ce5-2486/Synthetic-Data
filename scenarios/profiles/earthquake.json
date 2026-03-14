@@ -1,0 +1,15 @@
+{
+  "name": "earthquake_profile",
+  "disaster_type": "earthquake",
+  "description": "High uncertainty with structural blockages and disrupted routes.",
+  "config_overrides": {
+    "EVAC_BLOCK_PROB": 0.22,
+    "EVAC_SNOW_MIN": 0.0,
+    "EVAC_SNOW_MAX": 0.1,
+    "EVAC_SLOPE_ALPHA": 0.5,
+    "EVAC_SNOW_ALPHA": 0.2,
+    "EVAC_OBS_RADIUS_M": 65.0,
+    "EVAC_OBS_ERROR_WALK": 0.15,
+    "EVAC_OBS_ERROR_DRIVE": 0.2
+  }
+}

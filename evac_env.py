@@ -145,18 +145,41 @@ class EvacEnv:
         self.blocked_edges_drive.clear()
         self.snow_depth_walk.clear()
         self.snow_depth_drive.clear()
+        start_zero = getattr(config, "EVAC_SNOW_DYNAMIC", False) and getattr(config, "EVAC_SNOW_START_ZERO", False)
+        init_block_prob = getattr(config, "EVAC_BLOCK_INIT_PROB", config.EVAC_BLOCK_PROB)
         for u, v in self.G_walk.edges():
-            if random.random() < config.EVAC_BLOCK_PROB:
+            if random.random() < init_block_prob:
                 self.blocked_edges_walk.add((u, v))
-            self.snow_depth_walk[(u, v)] = random.uniform(config.EVAC_SNOW_MIN, config.EVAC_SNOW_MAX)
+            self.snow_depth_walk[(u, v)] = 0.0 if start_zero else random.uniform(config.EVAC_SNOW_MIN, config.EVAC_SNOW_MAX)
         for u, v in self.G_drive.edges():
-            if random.random() < config.EVAC_BLOCK_PROB:
+            if random.random() < init_block_prob:
                 self.blocked_edges_drive.add((u, v))
-            self.snow_depth_drive[(u, v)] = random.uniform(config.EVAC_SNOW_MIN, config.EVAC_SNOW_MAX)
+            self.snow_depth_drive[(u, v)] = 0.0 if start_zero else random.uniform(config.EVAC_SNOW_MIN, config.EVAC_SNOW_MAX)
 
     def _init_shelters(self):
         nodes = list(self.G_walk.nodes())
         self.shelters = shelter.select_shelters(nodes, config.EVAC_SHELTER_COUNT)
+
+    def step_hazards(self):
+        if not getattr(config, "EVAC_SNOW_DYNAMIC", False):
+            return
+
+        def _update_snow(depth_map, blocked_set):
+            for edge, depth in depth_map.items():
+                growth = config.EVAC_SNOW_ACCUM_PER_STEP + random.uniform(
+                    -config.EVAC_SNOW_ACCUM_NOISE, config.EVAC_SNOW_ACCUM_NOISE
+                )
+                new_depth = max(0.0, min(1.0, depth + growth))
+                depth_map[edge] = new_depth
+                if (
+                    edge not in blocked_set
+                    and new_depth >= config.EVAC_BLOCK_FROM_SNOW_THRESHOLD
+                    and random.random() < config.EVAC_BLOCK_FROM_SNOW_PROB
+                ):
+                    blocked_set.add(edge)
+
+        _update_snow(self.snow_depth_walk, self.blocked_edges_walk)
+        _update_snow(self.snow_depth_drive, self.blocked_edges_drive)
 
     def nearest_node(self, lat, lon):
         if ox is not None:

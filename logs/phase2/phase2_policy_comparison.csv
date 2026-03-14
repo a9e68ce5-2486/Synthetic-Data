@@ -1,0 +1,13 @@
+scenario,disaster_type,policy,is_best_policy,runs,avg_reached_rate,avg_alive_rate,avg_exposure_total,avg_t95_step,baseline_policy,reached_rate_improve_vs_baseline,exposure_improve_vs_baseline
+enterprise_baseline,baseline,round_robin,False,20,0.2654,1.0,294.8832,,round_robin,0.0,0.0
+enterprise_baseline,baseline,nearest,True,20,0.2909,1.0,273.3787,,round_robin,0.09608138658628472,0.07866194403587408
+enterprise_baseline,baseline,priority_faculty,False,20,0.2718,1.0,288.926,,round_robin,0.024114544084400755,0.02061842824806352
+enterprise_blizzard_mid,blizzard,round_robin,False,3,0.0061,1.0,203.028,,round_robin,0.0,0.0
+enterprise_blizzard_mid,blizzard,nearest,True,3,0.0788,1.0,195.2986,,round_robin,11.918032786885245,0.03957734464046336
+enterprise_blizzard_mid,blizzard,priority_faculty,False,3,0.0364,1.0,200.0489,,round_robin,4.967213114754098,0.014891858940488991
+enterprise_earthquake,earthquake,round_robin,False,20,0.0073,1.0,390.8246,,round_robin,0.0,0.0
+enterprise_earthquake,earthquake,nearest,True,20,0.0427,1.0,378.449,,round_robin,4.8493150684931505,0.03270083947903142
+enterprise_earthquake,earthquake,priority_faculty,False,20,0.0173,1.0,386.5519,,round_robin,1.3698630136986298,0.011053366960555585
+enterprise_compound,compound,round_robin,False,20,0.0055,1.0,412.5381,,round_robin,0.0,0.0
+enterprise_compound,compound,nearest,True,20,0.0291,1.0,403.5708,,round_robin,4.290909090909092,0.02221989301505452
+enterprise_compound,compound,priority_faculty,False,20,0.0136,1.0,409.4079,,round_robin,1.4727272727272727,0.007645675620817288

@@ -1,0 +1,10 @@
+Management Summary
+Scenario: enterprise_earthquake
+Baseline Policy: round_robin
+
+For scenario 'enterprise_earthquake', best policy is 'nearest': reached rate improvement vs 'round_robin' = 484.9%, exposure improvement = 3.3%, T95 not available.
+
+Policy Snapshot:
+- round_robin: runs=20, avg_reached_rate=0.0073, avg_alive_rate=1.0, avg_exposure_total=390.8246, avg_t95_step=None
+- nearest: runs=20, avg_reached_rate=0.0427, avg_alive_rate=1.0, avg_exposure_total=378.449, avg_t95_step=None
+- priority_faculty: runs=20, avg_reached_rate=0.0173, avg_alive_rate=1.0, avg_exposure_total=386.5519, avg_t95_step=None

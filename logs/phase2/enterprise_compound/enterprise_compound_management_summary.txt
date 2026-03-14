@@ -1,0 +1,10 @@
+Management Summary
+Scenario: enterprise_compound
+Baseline Policy: round_robin
+
+For scenario 'enterprise_compound', best policy is 'nearest': reached rate improvement vs 'round_robin' = 429.1%, exposure improvement = 2.2%, T95 not available.
+
+Policy Snapshot:
+- round_robin: runs=20, avg_reached_rate=0.0055, avg_alive_rate=1.0, avg_exposure_total=412.5381, avg_t95_step=None
+- nearest: runs=20, avg_reached_rate=0.0291, avg_alive_rate=1.0, avg_exposure_total=403.5708, avg_t95_step=None
+- priority_faculty: runs=20, avg_reached_rate=0.0136, avg_alive_rate=1.0, avg_exposure_total=409.4079, avg_t95_step=None
