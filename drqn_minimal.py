@@ -2,6 +2,7 @@ import argparse
 import csv
 import os
 import random
+from collections import deque
 
 import numpy as np
 
@@ -130,6 +131,58 @@ class TorchDRQN(nn.Module):
         return q, h
 
 
+class EpisodeReplayBuffer:
+    def __init__(self, capacity_episodes):
+        self.capacity_episodes = int(capacity_episodes)
+        self.episodes = deque(maxlen=self.capacity_episodes)
+        self.total_transitions = 0
+
+    def __len__(self):
+        return len(self.episodes)
+
+    def add_episode(self, transitions):
+        if not transitions:
+            return
+        if len(self.episodes) == self.capacity_episodes:
+            oldest = self.episodes.popleft()
+            self.total_transitions -= len(oldest)
+        self.episodes.append(transitions)
+        self.total_transitions += len(transitions)
+
+    def _eligible_episodes(self, min_len):
+        return [ep for ep in self.episodes if len(ep) >= min_len]
+
+    def sample_sequences(self, batch_size, burn_in, seq_len):
+        total_len = burn_in + seq_len
+        eligible = self._eligible_episodes(total_len)
+        if len(eligible) < batch_size:
+            raise ValueError("Not enough eligible episodes for sequence sampling.")
+
+        chosen = random.sample(eligible, batch_size)
+        obs_batch = []
+        act_batch = []
+        rew_batch = []
+        nxt_batch = []
+        done_batch = []
+        for ep in chosen:
+            start = random.randint(0, len(ep) - total_len)
+            chunk = ep[start : start + total_len]
+            obs, act, rew, nxt, done = zip(*chunk)
+            obs_batch.append(np.stack(obs).astype(np.float32))
+            act_batch.append(np.array(act, dtype=np.int64))
+            rew_batch.append(np.array(rew, dtype=np.float32))
+            nxt_batch.append(np.stack(nxt).astype(np.float32))
+            done_batch.append(np.array(done, dtype=np.float32))
+
+        return (
+            np.stack(obs_batch),   # [B, T, obs]
+            np.stack(act_batch),   # [B, T]
+            np.stack(rew_batch),   # [B, T]
+            np.stack(nxt_batch),   # [B, T, obs]
+            np.stack(done_batch),  # [B, T]
+        )
+
+
 def _pick_device(device_arg):
     if device_arg != "auto":
         return torch.device(device_arg)
@@ -163,12 +216,17 @@ def train(args):
     os.makedirs(args.output_dir, exist_ok=True)
     history_path = os.path.join(args.output_dir, "drqn_torch_history.csv")
     ckpt_path = os.path.join(args.output_dir, "drqn_torch_weights.pt")
+    best_ckpt_path = os.path.join(args.output_dir, "drqn_torch_best.pt")
+    replay = EpisodeReplayBuffer(args.replay_episodes)
 
     eps = args.eps_start
     global_step = 0
+    train_updates = 0
+    returns = []
+    best_ma = -float("inf")
     with open(history_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["episode", "return", "steps", "reached", "avg_loss", "eps"])
+        w.writerow(["episode", "return", "steps", "reached", "avg_loss", "eps", "moving_avg_return", "buffer_size"])
 
         for ep in range(1, args.episodes + 1):
             obs_np = env.reset()
@@ -178,6 +236,7 @@ def train(args):
             losses = []
             reached = 0
             step = 0
+            episode_transitions = []
 
             while not done:
                 step += 1
@@ -194,39 +253,105 @@ def train(args):
                 if done and env.node == env.goal_node:
                     reached = 1
 
-                q_selected = q_t[0, action]
+                episode_transitions.append((obs_np, action, reward, next_obs_np, float(done)))
 
-                with torch.no_grad():
-                    next_obs_t = torch.tensor(next_obs_np, dtype=torch.float32, device=device).unsqueeze(0)
-                    q_next_target, _ = target_net(next_obs_t, h_next.detach())
-                    max_next = torch.max(q_next_target, dim=1).values[0]
-                    td_target = torch.tensor(
-                        reward + (0.0 if done else args.gamma * float(max_next.item())),
-                        dtype=torch.float32,
-                        device=device,
-                    )
+                if replay.total_transitions >= args.warmup_steps and len(replay) >= args.batch_size:
+                    for _ in range(args.updates_per_step):
+                        obs_seq, act_seq, rew_seq, nxt_seq, done_seq = replay.sample_sequences(
+                            batch_size=args.batch_size,
+                            burn_in=args.burn_in,
+                            seq_len=args.seq_len,
+                        )
+                        obs_t = torch.tensor(obs_seq, dtype=torch.float32, device=device)   # [B,T,O]
+                        act_t = torch.tensor(act_seq, dtype=torch.int64, device=device)      # [B,T]
+                        rew_t = torch.tensor(rew_seq, dtype=torch.float32, device=device)    # [B,T]
+                        nxt_t = torch.tensor(nxt_seq, dtype=torch.float32, device=device)    # [B,T,O]
+                        done_t = torch.tensor(done_seq, dtype=torch.float32, device=device)  # [B,T]
 
-                loss = loss_fn(q_selected, td_target)
-                optimizer.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(policy_net.parameters(), args.grad_clip)
-                optimizer.step()
+                        h_online = policy_net.init_hidden(batch_size=args.batch_size, device=device)
+                        h_target = target_net.init_hidden(batch_size=args.batch_size, device=device)
+                        h_online_for_next = policy_net.init_hidden(batch_size=args.batch_size, device=device)
 
-                if global_step % args.target_update == 0:
-                    target_net.load_state_dict(policy_net.state_dict())
+                        # Burn-in: warm hidden states without contributing to loss.
+                        if args.burn_in > 0:
+                            with torch.no_grad():
+                                for t in range(args.burn_in):
+                                    _, h_online = policy_net(obs_t[:, t, :], h_online)
+                                    _, h_target = target_net(obs_t[:, t, :], h_target)
+                                    _, h_online_for_next = policy_net(obs_t[:, t, :], h_online_for_next)
 
-                losses.append(float(loss.item()))
+                        seq_losses = []
+                        for u in range(args.seq_len):
+                            t_idx = args.burn_in + u
+                            q_online, h_online = policy_net(obs_t[:, t_idx, :], h_online)
+                            a_t = act_t[:, t_idx].unsqueeze(1)
+                            q_selected = q_online.gather(1, a_t).squeeze(1)
+
+                            with torch.no_grad():
+                                # Double DQN: action from online net, value from target net.
+                                q_next_online, h_online_for_next = policy_net(nxt_t[:, t_idx, :], h_online_for_next)
+                                next_action = q_next_online.argmax(dim=1, keepdim=True)
+                                q_next_target, h_target = target_net(nxt_t[:, t_idx, :], h_target)
+                                next_q = q_next_target.gather(1, next_action).squeeze(1)
+                                td_target = rew_t[:, t_idx] + args.gamma * (1.0 - done_t[:, t_idx]) * next_q
+
+                            seq_losses.append(loss_fn(q_selected, td_target))
+
+                        loss = torch.stack(seq_losses).mean()
+                        optimizer.zero_grad()
+                        loss.backward()
+                        nn.utils.clip_grad_norm_(policy_net.parameters(), args.grad_clip)
+                        optimizer.step()
+
+                        train_updates += 1
+                        if train_updates % args.target_update == 0:
+                            target_net.load_state_dict(policy_net.state_dict())
+
+                        losses.append(float(loss.item()))
+
                 ep_return += reward
                 obs_np = next_obs_np
                 h = h_next.detach()
 
+            replay.add_episode(episode_transitions)
+
             avg_loss = float(np.mean(losses)) if losses else 0.0
-            w.writerow([ep, f"{ep_return:.4f}", step, reached, f"{avg_loss:.6f}", f"{eps:.4f}"])
+            returns.append(ep_return)
+            window = max(1, int(args.best_window))
+            moving_avg = float(np.mean(returns[-window:]))
+            w.writerow(
+                [
+                    ep,
+                    f"{ep_return:.4f}",
+                    step,
+                    reached,
+                    f"{avg_loss:.6f}",
+                    f"{eps:.4f}",
+                    f"{moving_avg:.4f}",
+                    replay.total_transitions,
+                ]
+            )
+
+            if moving_avg > best_ma:
+                best_ma = moving_avg
+                torch.save(
+                    {
+                        "model_state_dict": policy_net.state_dict(),
+                        "obs_dim": obs_dim,
+                        "hidden_dim": args.hidden_dim,
+                        "num_actions": NUM_ACTIONS,
+                        "episode": ep,
+                        "moving_avg_return": moving_avg,
+                    },
+                    best_ckpt_path,
+                )
 
             if ep % args.log_every == 0 or ep == 1:
                 print(
                     f"[drqn] ep={ep:4d} return={ep_return:8.3f} steps={step:3d} "
-                    f"reached={reached} avg_loss={avg_loss:.6f} eps={eps:.3f}",
+                    f"reached={reached} avg_loss={avg_loss:.6f} eps={eps:.3f} "
+                    f"ma_return={moving_avg:8.3f} best_ma={best_ma:8.3f} "
+                    f"trans={replay.total_transitions:6d} eps_buf={len(replay):4d}",
                     flush=True,
                 )
 
@@ -243,6 +368,7 @@ def train(args):
     )
     print(f"[drqn] history: {history_path}")
     print(f"[drqn] weights: {ckpt_path}")
+    print(f"[drqn] best weights: {best_ckpt_path} (best moving_avg_return={best_ma:.3f})")
 
 
 def main():
@@ -257,6 +383,13 @@ def main():
     parser.add_argument("--eps-decay", type=float, default=0.995)
     parser.add_argument("--target-update", type=int, default=100)
     parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument("--replay-episodes", type=int, default=600)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--warmup-steps", type=int, default=500)
+    parser.add_argument("--updates-per-step", type=int, default=1)
+    parser.add_argument("--seq-len", type=int, default=8)
+    parser.add_argument("--burn-in", type=int, default=4)
+    parser.add_argument("--best-window", type=int, default=20)
     parser.add_argument("--log-every", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output-dir", default="logs")
