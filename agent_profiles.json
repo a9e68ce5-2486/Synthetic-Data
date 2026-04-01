@@ -1,0 +1,42 @@
+{
+  "senior_faculty": {
+    "walk_speed_multiplier": 0.6,
+    "compliance_rate": 0.95,
+    "panic_level": 0.1,
+    "observation_error_multiplier": 0.8,
+    "decision_delay_steps": 0,
+    "shelter_familiarity": 0.9
+  },
+  "young_student": {
+    "walk_speed_multiplier": 1.2,
+    "compliance_rate": 0.6,
+    "panic_level": 0.4,
+    "observation_error_multiplier": 1.5,
+    "decision_delay_steps": 2,
+    "shelter_familiarity": 0.4
+  },
+  "staff_admin": {
+    "walk_speed_multiplier": 1.1,
+    "compliance_rate": 0.95,
+    "panic_level": 0.05,
+    "observation_error_multiplier": 0.8,
+    "decision_delay_steps": 0,
+    "shelter_familiarity": 0.95
+  },
+  "mobility_impaired": {
+    "walk_speed_multiplier": 0.4,
+    "compliance_rate": 0.9,
+    "panic_level": 0.6,
+    "observation_error_multiplier": 1.5,
+    "decision_delay_steps": 2,
+    "shelter_familiarity": 0.4
+  },
+  "visitor": {
+    "walk_speed_multiplier": 0.8,
+    "compliance_rate": 0.6,
+    "panic_level": 0.7,
+    "observation_error_multiplier": 2.2,
+    "decision_delay_steps": 3,
+    "shelter_familiarity": 0.1
+  }
+}

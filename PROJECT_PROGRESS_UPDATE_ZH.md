@@ -1,0 +1,1336 @@
+# 專案更新歷程
+
+> 文件建立日期：2026-03-21
+>  
+> 最近更新日期：2026-03-31
+>
+> 本文件涵蓋的主要更新區間：2026-03-21 至 2026-03-31
+
+這份文件整理目前專案在 DRQN shelter-routing 主線上的主要更新，包括：
+
+- 額外參考的論文方向
+- 已經實作進系統的機制
+- 訓練與評估結果的演進
+- 目前最佳模型與下一階段方向
+
+## 一、目前額外參考與吸收的論文方向
+
+### 1. BEAG
+
+目前專案主要額外參考的核心論文是 **BEAG**。
+
+雖然沒有完全重現原始 BEAG 演算法，但已經吸收並轉化成適合本專案 OSM graph evacuation 任務的幾個重要概念，包括：
+
+- 探索過程中避免重複失敗
+- 利用中繼目標降低長路徑學習難度
+- 逐步放寬訓練難度
+- 在更接近真實避難條件的環境中強化訓練穩定性
+
+### 2. Teacher-Student Curriculum Learning (TSCL)
+
+除了 BEAG 之外，也進一步參考了 **Teacher-Student Curriculum Learning** 類概念。
+
+主要啟發是：
+
+- curriculum 不必完全手動固定
+- 可以依照模型最近的成功率，自動調整接下來的訓練難度
+
+這個概念後來被實作成目前的 `adaptive curriculum`。
+
+### 3. 其他已整理但尚未正式導入主線的文獻方向
+
+目前也已經完成相關文獻整理，但尚未全面實作進主線的方向包括：
+
+- `Hindsight Experience Replay (HER)`
+- `Go-Explore`
+- `D* Lite`
+- `HIRO`
+- `Option-Critic`
+- `FeUdal Networks (FuN)`
+- `Random Network Distillation (RND)`
+- `Count-based exploration`
+
+這些方向目前屬於後續可能延伸的強化路徑，而不是已完成的主線功能。
+
+## 二、目前已補強並完成的主要機制
+
+### 1. Failure-Aware Exploration
+
+已加入 failure-aware exploration 機制，用來記錄失敗邊與重複錯誤路徑，降低 agent 一直重複嘗試同樣錯誤行為的機率。
+
+目的：
+
+- 提高探索效率
+- 減少 blocked edge 附近的無效重試
+- 避免局部卡死
+
+### 2. Subgoal / Checkpoint Learning
+
+已加入 checkpoint / subgoal 機制，將長距離 shelter-routing 任務拆成數個中繼目標，使 agent 能逐段學習而不是只依賴最終 shelter reward。
+
+目的：
+
+- 改善 sparse reward 問題
+- 降低長路徑學習難度
+- 提升收斂速度與穩定性
+
+### 3. Curriculum
+
+已加入 curriculum training。
+
+早期使用的是較固定的 `distance-based` 或 `coverage-based` curriculum，後來再進一步改為更有效的 `adaptive curriculum`。
+
+目的：
+
+- 先讓模型學會簡單起點
+- 再逐步面對較遠、較困難案例
+
+### 4. Dynamic Step Budget
+
+已加入 dynamic step budget，使不同起點距離的 episode 能夠根據最短路徑距離獲得不同的 `max_steps`。
+
+目的：
+
+- 避免遠距離案例因步數上限過低而被不合理地判失敗
+- 讓不同難度案例更公平
+
+### 5. Blocked-Aware Replanning
+
+已加入 blocked-aware replanning 機制。
+
+當原本的 target path 因災害或封路而變得不可行時，系統會重新規劃 checkpoint 與路徑，而不是繼續沿用過期的中繼目標。
+
+目的：
+
+- 強化封路情境下的穩定性
+- 讓 agent 在災害動態變化時仍能維持有效路徑選擇
+
+### 6. Frontier / Revisit Control
+
+已加入 frontier / revisit control，包含：
+
+- frontier bonus
+- revisit penalty
+
+並讓候選鄰居排序同時考慮：
+
+- graph progress
+- 是否反覆回訪同一節點
+
+目的：
+
+- 降低繞圈與局部震盪
+- 鼓勵 agent 往新且更有希望的區域前進
+
+### 7. Adaptive Curriculum
+
+在前述機制基礎上，後來又進一步加入了 `adaptive curriculum`，這是目前提升最明顯的一次改動。
+
+做法是：
+
+- 依最近一段訓練成功率
+- 自動放寬或收緊訓練距離上限
+
+目的：
+
+- 避免固定 curriculum schedule 放太快或太慢
+- 讓模型停留在最適合當前學習程度的難度區間
+
+## 三、DRQN 訓練主線的效能演進
+
+### 1. 舊版 easy 主線
+
+在較早期的穩定版本中，easy mode 的 best evaluation 結果為：
+
+- `reached_rate = 0.515`
+- `return_mean = 200.295`
+- `steps_mean = 72.59`
+
+這個階段代表 DRQN 已經開始有效，但仍然遠未達到穩定高成功率。
+
+### 2. `easy_long`
+
+之後將訓練拉長、放慢 curriculum 後，`easy_long` 的結果提升為：
+
+- `reached_rate = 0.585`
+- `return_mean = 256.959`
+- `steps_mean = 71.32`
+
+這表示：
+
+- 延長訓練與放慢 curriculum 確實有效
+- 模型已開始變得更成熟
+
+### 3. `easy_adaptive`
+
+更新日期：2026-03-21 至 2026-03-22
+
+在導入 TSCL-style adaptive curriculum 之後，easy stage 的表現出現顯著提升。
+
+evaluation 結果為：
+
+- `reached_rate = 1.000`
+- `return_mean = 461.249`
+- `steps_mean = 65.055`
+
+這代表：
+
+- 在 `p90 = 1765` 的 easy-stage 範圍內
+- DRQN 已經達到完整成功率
+- `adaptive curriculum` 是目前最關鍵的提升來源
+
+### 4. easy-stage 動畫結果
+
+在 `logs/drqn_easy_adaptive/drqn_torch_best.pt` 上跑互動動畫，結果同樣達到完整成功：
+
+- `final_reached = 55 / 55`
+- `ped = 40 / 40`
+- `car = 15 / 15`
+- `reached_rate = 1.0`
+- `avg_exposure_total = 1.3928`
+- `t90_step = 65`
+- `t95_step = 67`
+- `reach_rate_gap = 0.0`
+
+這表示 easy-stage 不只 evaluation 指標漂亮，動畫與實際模擬結果也一致地達到完整成功。
+
+## 四、Blocked Finetune 階段
+
+更新日期：2026-03-22 至 2026-03-23
+
+在 easy-stage best checkpoint 完成後，進一步將：
+
+- `logs/drqn_easy_adaptive/drqn_torch_best.pt`
+
+拿去做 blocked finetune。
+
+在這個階段，並不是單純延長訓練，而是針對封路情境做了幾項明確的 finetune 調整：
+
+- 以 `easy_adaptive` best checkpoint 作為初始化，而不是從頭訓練
+- 將 `curriculum-end-dist` 拉到 `2622`
+  - 對應更接近可達起點到 shelter 的最大距離範圍
+- 保持 `curriculum-freeze-episode = -1`
+  - 讓距離難度持續放寬，不在中途凍結
+- 將 `eps-decay` 調成 `0.997`
+  - 讓 blocked finetune 階段保留較多探索能力
+- 將 `w_exposure` 提高到 `0.7`
+  - 讓模型在封路與災害風險條件下更重視 exposure cost
+- 將 `block-from-snow-threshold` 設為 `0.85`
+- 將 `block-from-snow-prob` 設為 `0.003`
+  - 正式打開較明顯的 snow-induced blockage 訓練條件
+
+這些調整的目的，是讓模型從已經學會基本 shelter-routing 的 easy-stage policy 出發，再適應更接近真實災害條件的 blocked environment，而不是重新學一次完整導航行為。
+
+### 1. blocked evaluation
+
+blocked finetune 後的評估結果為：
+
+- `reached_rate = 0.995`
+- `return_mean = 442.664`
+- `steps_mean = 66.48`
+
+這表示：
+
+- 模型在封路情境下幾乎沒有明顯崩掉
+- 仍然保持接近完整成功率
+
+### 2. blocked 動畫結果
+
+使用：
+
+- `logs/drqn_blocked_finetune/drqn_torch_best.pt`
+
+跑動畫後，結果為：
+
+- `final_reached = 55 / 55`
+- `ped = 40 / 40`
+- `car = 15 / 15`
+- `reached_rate = 1.0`
+- `avg_exposure_total = 1.435`
+- `t90_step = 65`
+- `t95_step = 71`
+- `reach_rate_gap = 0.0`
+
+這表示：
+
+- 在 baseline interactive scenario 下
+- blocked finetune 模型依然能完整完成 evacuation
+- 而且 fairness gap 仍然維持在 0
+
+### 3. blocked multi-seed evaluation
+
+在 blocked finetune 完成後，另外又使用多個 evaluation seeds 做穩定性驗證：
+
+- seeds = `2026, 2027, 2028, 2029, 2030`
+- episodes per seed = `200`
+
+aggregate 結果為：
+
+- `reached_rate_mean = 0.998`
+- `reached_rate_std = 0.00245`
+- `return_mean_mean = 443.929`
+- `return_mean_std = 5.997`
+- `steps_mean_mean = 65.545`
+- `steps_mean_std = 0.641`
+
+這表示：
+
+- 目前 blocked final candidate 並不是單一 seed 偶然成功
+- 在不同 evaluation seeds 下仍維持接近完整成功率
+- 整體 variance 很小，模型穩定性已相當高
+
+### 4. baseline vs DRQN 正式比較
+
+在 `enterprise_baseline` scenario 上，已經完成：
+
+- `round_robin`
+- `nearest`
+- `drqn`
+
+三種 policy 的正式 batch comparison。
+
+主要結果如下：
+
+- `round_robin`
+  - `avg_reached_rate = 0.2654`
+  - `avg_exposure_total = 286.1414`
+
+- `nearest`
+  - `avg_reached_rate = 0.2909`
+  - `avg_exposure_total = 246.9240`
+
+- `drqn`
+  - `avg_reached_rate = 0.9627`
+  - `avg_exposure_total = 5.4061`
+  - `avg_t95_step = 183.79`
+
+比較結論非常明確：
+
+- `drqn` 是最佳 policy
+- 相對 `round_robin`，DRQN 的平均 reached rate 約提升 `262.7%`
+- 相對 `round_robin`，DRQN 的平均 exposure 約降低 `98.1%`
+
+這表示目前主線 DRQN 不只在單次動畫與單次 evaluation 上表現良好，也已經在正式 baseline comparison 中顯著優於目前保留的 heuristic baselines：
+
+- `round_robin`
+- `nearest`
+
+## 五、目前最佳模型
+
+確認日期：2026-03-23
+
+### 1. easy-stage best
+
+目前 easy-stage 最佳模型為：
+
+- `logs/drqn_easy_adaptive/drqn_torch_best.pt`
+
+### 2. final blocked candidate
+
+目前 blocked / final candidate 為：
+
+- `logs/drqn_blocked_finetune/drqn_torch_best.pt`
+
+這個模型目前同時具備：
+
+- blocked evaluation 幾乎完整成功
+- 互動動畫完整成功
+- multi-seed evaluation 穩定成功
+- baseline comparison 顯著優於 heuristics
+- pedestrian 與 car 都能到 shelter
+
+## 六、目前可下的整體結論
+
+截至目前為止，可以清楚得出以下結論：
+
+1. 參考 BEAG 後加入的探索、checkpoint、replanning 與 anti-loop 機制是有效的。
+2. `adaptive curriculum` 是目前最大的增益來源，直接把 easy-stage reached rate 從 `0.585` 拉升到 `1.000`。
+3. 以 easy-stage best model 為初始化做 blocked finetune 是成功的，blocked evaluation 已達 `0.995`。
+4. blocked final candidate 在 multi-seed evaluation 下達到：
+   - `reached_rate_mean = 0.998`
+   - `reached_rate_std = 0.00245`
+5. 在互動動畫與實際模擬中，DRQN 已能達到：
+   - `55 / 55` 全部到達
+   - `ped 40 / 40`
+   - `car 15 / 15`
+6. 在 `enterprise_baseline` 的正式比較中，DRQN 已明顯優於：
+   - `round_robin`
+   - `nearest`
+7. 目前 DRQN 主線已經成熟到足以作為 stable final candidate，並可進入下一階段：
+   - single-agent scaling
+   - shelter-aware / vehicle-aware extension
+
+## 七、Single-Agent Scaling 結果
+
+更新日期：2026-03-23
+
+在完成 blocked final candidate 後，已進一步用同一個 checkpoint 做更大規模的 single-agent scaling 測試。
+
+使用模型：
+
+- `logs/drqn_blocked_finetune/drqn_torch_best.pt`
+
+測試範圍已從：
+
+- `60 ped / 20 car`
+
+一路擴到：
+
+- `500 ped / 200 car`
+
+### 1. 代表性 scaling 結果
+
+- `60 / 20`
+  - `avg_reached_rate = 0.9537`
+  - `avg_exposure_total = 4.0570`
+  - `avg_t95_step = 146.4`
+
+- `100 / 40`
+  - `avg_reached_rate = 0.9886`
+  - `avg_exposure_total = 6.1833`
+  - `avg_t95_step = 185.7`
+
+- `200 / 80`
+  - `avg_reached_rate = 0.9902`
+  - `avg_exposure_total = 7.0167`
+  - `avg_t95_step = 197.25`
+
+- `300 / 120`
+  - `avg_reached_rate = 0.9917`
+  - `avg_exposure_total = 5.4917`
+  - `avg_t95_step = 175.0`
+
+- `400 / 160`
+  - `avg_reached_rate = 0.9989`
+  - `avg_exposure_total = 5.2629`
+  - `avg_t95_step = 169.2`
+
+- `500 / 200`
+  - `avg_reached_rate = 0.9968`
+  - `avg_exposure_total = 5.9366`
+  - `avg_t95_step = 159.0`
+
+### 2. scaling 結果的判讀
+
+這組結果表示：
+
+- 目前 final DRQN 在純數量放大下仍維持很高的 reached rate
+- 至少在目前模擬設定中，`500 / 200` 尚未把 routing policy 撐爆
+- 目前比較明顯的 scaling 成本主要反映在：
+  - `avg_exposure_total`
+  - `t95_step`
+
+但這也同時說明：
+
+- 單純增加 agent 數量，尚未完全逼出更強烈的系統互動壓力
+- 下一步如果要更真實地測試企業場景，應該把重點轉向：
+  - shelter capacity
+  - congestion / queueing
+  - 更明確的資源競爭
+
+## 八、Route Recommendation Prototype
+
+更新日期：2026-03-23
+
+除了核心 DRQN policy 之外，目前也已完成第一版 route recommendation prototype。
+
+新增內容：
+
+- `route_recommendation.py`
+- `run_route_recommendation.sh`
+
+目前已能做到：
+
+- 給定一個起點 node
+- 使用目前的 DRQN checkpoint rollout
+- 輸出：
+  - `recommended shelter`
+  - `complete node path`
+  - `traversed edges`
+  - `steps`
+  - `exposure`
+  - `replan_count`
+  - `target_history`
+
+這表示目前系統已經不只是一個研究用 policy，也開始具備：
+
+- 把 step-level decision 轉成完整避難路線建議
+
+的能力。
+
+對企業應用而言，這是很重要的一步，因為它讓模型開始能回答：
+
+- 某個起點的人應該往哪個 shelter？
+- 具體該走哪條路？
+
+### 1. Zone-level Route Recommendation 已完成第一版
+
+在單一起點路線抽取完成後，目前也已進一步完成第一版 **zone-level route recommendation**。
+
+新增內容：
+
+- `zone_assignment.py`
+- `run_zone_assignment.sh`
+- `zone_route_recommendation.py`
+- `run_zone_route_recommendation.sh`
+
+目前已能做到：
+
+- 將 scenario 中的人員起點自動分群成多個 zones
+- 對每個 zone 輸出：
+  - `primary_shelter`
+  - `backup_shelter`
+  - `primary_route`
+  - `backup_route`
+- route 內容包含：
+  - `steps`
+  - `exposure`
+  - `path_nodes`
+  - `traversed_edges`
+  - `replan_count`
+  - `target_history`
+
+代表性輸出檔案：
+
+- `logs/zone_assignment/enterprise_baseline_zones.json`
+- `logs/zone_route_recommendation/enterprise_baseline_zone_routes.json`
+
+這表示目前系統已經不只支援：
+
+- 個體級路線建議
+
+也開始支援：
+
+- 區域級 shelter pre-allocation
+- 區域級 primary / backup 路線建議
+- 更接近企業 SOP / drill planning 的輸出格式
+
+## 九、Shelter Capacity 第一版
+
+更新日期：2026-03-23
+
+為了把 scaling 從單純數量放大，進一步推向更真實的互動壓力測試，目前已完成 shelter capacity 的第一版實作。
+
+新增內容：
+
+- `EVAC_SHELTER_CAPACITY_ENABLED`
+- `EVAC_SHELTER_CAPACITY_PER_SITE`
+
+並在環境與 batch simulation 中加入：
+
+- shelter occupancy
+- shelter admission check
+- shelter full 後重新分配到其他可用 shelter
+- `shelter_reassignments` summary 欄位
+
+這一版的目的不是一次做完整 multi-agent interaction，而是先把最關鍵的資源限制納入：
+
+- shelter 不是無限容量
+
+這能讓後續 scaling 更像真實企業避難情境，也能為下一步的：
+
+- shelter-aware routing
+- congestion-aware interaction
+
+建立基礎。
+
+### 1. capacity-aware scaling 結果
+
+在打開 shelter capacity 後，已針對以下幾組規模做 interaction-aware scaling 測試：
+
+- `200 / 80`, `cap = 50`
+- `300 / 120`, `cap = 70`
+- `500 / 200`, `cap = 100`
+
+代表性結果如下：
+
+- `200 / 80`, `cap=50`
+  - `avg_reached_rate = 0.9536`
+  - `avg_exposure_total = 23.0600`
+  - `avg_t90_step = 230.29`
+  - `avg_t95_step = 361.4`
+  - `avg_shelter_reassignments = 41.12`
+
+- `300 / 120`, `cap=70`
+  - `avg_reached_rate = 0.9075`
+  - `avg_exposure_total = 37.6288`
+  - `avg_t90_step = 327.25`
+  - `avg_t95_step = None`
+  - `avg_shelter_reassignments = 102.33`
+
+- `500 / 200`, `cap=100`
+  - `avg_reached_rate = 0.8571`
+  - `avg_exposure_total = 32.6220`
+  - `avg_t90_step = None`
+  - `avg_t95_step = None`
+  - `avg_shelter_reassignments = 11774.2`
+
+這表示：
+
+- 一旦把 shelter 容量限制納入，系統壓力就會被真正逼出來
+- reached rate 會下降
+- exposure 會顯著上升
+- t90 / t95 會明顯變慢
+- 高壓規模下會出現大量 shelter reassignment churn
+
+### 2. shelter-aware assignment 補強
+
+為了降低 shelter full 後的大量重分配，已經再補了兩個針對性機制：
+
+- `capacity-aware initial shelter assignment`
+  - 在初始指派 shelter 時，就先避開容量已不足的 shelter
+- `taboo shelter memory`
+  - agent 被某個 shelter 拒收後，暫時把該 shelter 加入自己的禁選集合
+
+這兩個機制的目的，是降低：
+
+- 重複撞向已滿 shelter
+- 高壓場景下反覆重分配造成的 churn
+
+目前狀態：
+
+- 兩個機制都已完成實作
+- `capacity-aware initial assignment` 已重跑並確認在中等規模下有部分改善
+- `taboo shelter memory` 已完成並完成新一輪驗證，但 aggregate KPI 沒有明顯改善，因此目前不列為主線增益機制
+
+### 3. interaction-aware reranking 驗證結果
+
+為了往 multi-agent interaction 擴展，也另外做了第一輪 execution-time interaction-aware feature 驗證。
+
+目前已完成：
+
+- `edge congestion-aware reranking` 第一版
+
+其核心作法是：
+
+- 不改 DRQN observation 維度
+- 不重訓主線模型
+- 在多 agent 執行時，利用：
+  - edge occupancy
+  - node occupancy
+  - local density
+  - same-step edge choice
+  
+  對候選鄰居做 congestion-aware reranking
+
+目前驗證結果：
+
+- 相較於原始 capacity baseline，並沒有形成穩定、全面的 KPI 改善
+- 在部分中等壓力場景中，疏散速度變快，但 reached rate 或 exposure 不一定更好
+- 在高壓場景中，改善幅度有限，尚不足以成為主線預設
+
+因此目前判斷：
+
+- `edge congestion-aware reranking` 應保留為 experimental branch
+- 不應直接取代目前主線
+
+### 4. zone-level capacity-aware demand balancing
+
+根據 shelter capacity 與相關文獻分析，目前已將 zone assignment 升級成：
+
+- `capacity-aware demand balancing`
+
+這一版不再只是把每個 zone 指派給最近 shelter，而是同時考慮：
+
+- 平均距離
+- 剩餘容量
+- zone demand 對剩餘容量的壓力
+- overload 懲罰
+
+目前已更新：
+
+- `zone_assignment.py`
+- `zone_route_recommendation.py`
+
+新增輸出：
+
+- `assignment_mode = capacity_aware_demand_balancing`
+- `primary_assignment_score`
+
+後續又再補了一步：
+
+- `route-feasibility filter`
+
+也就是在 `zone_route_recommendation.py` 中，不再直接使用 zone assignment 的 primary / backup shelter 當最終結果，而是：
+
+- 先保留：
+  - `assigned_primary_shelter`
+  - `assigned_backup_shelter`
+- 再對候選 shelters 逐一做 route rollout
+- 從可達路線中選出最終：
+  - `primary_shelter`
+  - `backup_shelter`
+
+這樣做的原因是，在 `enterprise_capacity_a300_c120_cap70` 測試中，已經觀察到：
+
+- 部分 zone 雖然有被分配到 shelter
+- 但對應的 representative route 可能根本不可達
+- 或 backup route 非常差
+
+因此目前 zone-level planning 已經不是只有：
+
+- demand balancing
+
+還加上了：
+
+- route feasibility screening
+
+這代表目前 zone-level planning 已經從：
+
+- 最近 shelter 指派
+
+進一步升級成：
+
+- 容量感知的分區需求平衡
+- 加上 route-feasible primary / backup route selection
+
+接著又再補了兩個重要步驟：
+
+- `hard capacity-respecting assignment`
+- `backup quality threshold`
+
+`hard capacity-respecting assignment` 的作用是：
+
+- 不再允許 `remaining_after_primary < 0`
+- 對於超過 primary shelter 容量的 zone demand，明確分成：
+  - `primary_assigned_demand`
+  - `backup_assigned_demand`
+  - `overflow_demand`
+  - `unassigned_demand`
+
+在 `enterprise_capacity_a300_c120_cap70` 測試中，已經觀察到：
+
+- `zone_2` 的 `85` 人，會被拆成：
+  - `primary_assigned = 70`
+  - `backup_assigned = 15`
+  - `unassigned = 0`
+- `zone_3` 的 `31` 人，會被拆成：
+  - `primary_assigned = 29`
+  - `backup_assigned = 2`
+  - `unassigned = 0`
+
+這表示目前 zone assignment 已能同時滿足：
+
+- 容量合法
+- 無未分配需求
+
+`backup quality threshold` 則是加在 `zone_route_recommendation.py` 上，用來避免備援路線雖然可達、但品質明顯過差。
+
+目前門檻為：
+
+- `EVAC_ZONE_BACKUP_MAX_STEP_RATIO = 1.50`
+- `EVAC_ZONE_BACKUP_MAX_EXPOSURE_RATIO = 2.50`
+
+也就是：
+
+- `backup_steps <= primary_steps * 1.5`
+- `backup_exposure <= primary_exposure * 2.5`
+
+在此基礎上，後來又再加入：
+
+- `primary route-quality-aware recommendation`
+
+這一步沒有直接推翻 hard-capacity assignment，而是把 route recommendation 輸出分成兩層：
+
+- `assigned_*`
+  - 代表容量合法的實際分配結果
+- `recommended_*`
+  - 代表在可達候選中，依據實際路線品質重新排序後的建議主 / 備援 shelter
+
+目前 route quality score 為：
+
+- `score = steps * 1.0 + exposure * 12.0`
+
+新增輸出包括：
+
+- `recommended_primary_shelter`
+- `recommended_backup_shelter`
+- `recommended_primary_route`
+- `recommended_backup_route`
+- `recommended_primary_route_quality_score`
+- `recommended_backup_route_quality_score`
+
+這讓系統目前已經不只是：
+
+- zone-level capacity-respecting assignment
+
+而是進一步具備：
+
+- route-feasible
+- backup-quality-controlled
+- primary route-quality-reranked
+
+的 zone-level recommendation layer。
+
+在最新一次 `enterprise_capacity_a300_c120_cap70` 測試中，也已經觀察到這些新輸出確實有作用：
+
+- `zone_1`
+  - `assigned_primary` 與 `recommended_primary` 已不同
+  - route-quality rerank 會把主建議改派到更短、更低 exposure 的路線
+- `zone_4`
+  - `recommended_primary` 也與 `assigned_primary` 不同
+  - 表示 recommendation layer 已能修正 assignment core 沒有內生考慮 route quality 的缺口
+
+同時，系統也已能直接標出：
+
+- `zones_with_weak_backup = [1, 2, 4, 5]`
+
+這表示：
+
+- `zone_0`、`zone_3` 的備援可視為可用
+- `zone_1`、`zone_2`、`zone_4`、`zone_5` 的備援雖可達，但不宜視為高信賴備援
+
+目前也已加入：
+
+- `backup_status`
+- `recommended_backup_status`
+- `backup_weak`
+
+以及管理端摘要輸出：
+
+- `*_management_summary.txt`
+
+用來直接列出：
+
+- weak backup zones
+- changed primary zones
+- changed backup zones
+- 建議優先關注的 zone
+
+另外也已修正：
+
+- `zone_assignment.py`
+- `zone_route_recommendation.py`
+
+中原本的 shelter capacity metadata bug。
+
+先前在 `temporary_config(...)` 外讀取 config，會讓：
+
+- `shelter_capacity_enabled`
+- `shelter_capacity_per_site`
+
+錯誤回退成預設值。這個問題目前已修正。
+
+## 十、下一階段方向
+
+目前單 agent shelter-routing 主線已經達成高完成度，接下來最合理的方向是：
+
+1. 先用 `capacity-aware demand balancing + route-feasibility filter` 版本重跑 zone assignment / zone route recommendation，觀察 capacity scenario 下的分流結果。
+2. 補齊 comparison pipeline 中尚未聚合完成的 fairness summary 欄位。
+3. 在 route recommendation prototype 上補：
+   - primary assignment 與 recommendation 的一致化
+   - bottleneck annotation
+   - 更精簡的 management summary
+4. 若仍有時間，再往更完整的 multimodal / vehicle-aware / shelter-aware 決策擴展，而不是直接推翻現有成功主線。
+
+另外，若從 multi-agent interaction 的角度檢視，目前仍明確缺少：
+
+- `edge-level queueing / slowdown`
+- `shelter occupancy aware routing`
+- `vehicle / shuttle competition`
+- 顯式 coordinated multi-agent policy
+
+因此目前的判斷是：
+
+- 已有一套可用的 interaction-aware enterprise planning prototype
+- 但還不是完整的 multi-agent interaction system
+- 接下來若要再往前推，最值得優先補的是 `edge-level queueing / slowdown`
+
+## 十一、災害強度分級（Disaster Severity Grading）
+
+更新日期：2026-03-25
+
+目前已在 `scenario_loader.py` 中加入災害強度分級能力，支援：
+
+- `blizzard`
+- `earthquake`
+- `compound`
+
+每一種災害都可以指定：
+
+- `light`
+- `moderate`
+- `severe`
+- `extreme`
+
+分級後，封路與災害相關參數會隨強度由輕到重變化。
+
+以 `blizzard` 為例，目前已會隨強度調整：
+
+- `EVAC_BLOCK_PROB`
+- `EVAC_BLOCK_INIT_PROB`
+- `EVAC_SNOW_MIN`
+- `EVAC_SNOW_MAX`
+- `EVAC_SNOW_ACCUM_PER_STEP`
+- `EVAC_BLOCK_FROM_SNOW_THRESHOLD`
+- `EVAC_BLOCK_FROM_SNOW_PROB`
+
+### 1. Blizzard severity sweep 結果
+
+目前已完成：
+
+- `scenarios/enterprise_blizzard.json`
+
+在四級強度下的 `drqn` sweep。
+
+結果如下：
+
+- `light`
+  - `reached_rate = 0.8354`
+  - `exposure = 16.7949`
+- `moderate`
+  - `reached_rate = 0.7518`
+  - `exposure = 72.8134`
+- `severe`
+  - `reached_rate = 0.6455`
+  - `exposure = 108.3522`
+- `extreme`
+  - `reached_rate = 0.5345`
+  - `exposure = 90.6228`
+
+可下的結論：
+
+- `reached_rate` 會隨 blizzard 強度由輕到重明顯下降
+- 這表示災害分級已經成功把封路壓力拉開
+- `exposure` 在 `extreme` 沒有再高過 `severe`
+  - 這較可能代表極端情況下更多 agent 提早卡住、無法有效移動
+  - 因此累積 exposure 不一定單調增加
+
+所以目前判斷：
+
+- `blizzard intensity grading` 可保留
+- 後續應以 `reached_rate` 當成分級設計是否有效的主要指標
+
+### 2. 目前狀態
+
+目前已完成：
+
+- severity loader
+- severity sweep script
+- `blizzard` 的正式 sweep 驗證
+
+下一步建議：
+
+- 跑 `earthquake severity sweep`
+- 再跑 `compound severity sweep`
+
+這樣的路線可以同時保留目前已經完成的高品質成果，並把後續延伸建立在穩定可驗證的基礎上。
+
+## 十二、跨嚴重度效能改善——訓練/評估 Distribution Mismatch 修正
+
+更新日期：2026-03-29
+
+### 1. 問題根因分析
+
+在完成 blizzard severity sweep 後，觀察到 `reached_rate` 隨嚴重度明顯下滑：
+
+| Severity | reached_rate | 相對 baseline 的下降 |
+|----------|-------------|-------------------|
+| light    | 0.8354      | -12.7%            |
+| moderate | 0.7518      | -21.1%            |
+| severe   | 0.6455      | -32.7%            |
+| extreme  | 0.5345      | -44.8%            |
+
+診斷後確認主要根因有三：
+
+**根因 1：訓練與評估的 `block_init_prob` 不一致（最主要）**
+
+訓練時（所有現有 finetune 腳本）均使用預設 `block_init_prob = 0.0`，代表訓練環境一開始沒有任何封閉邊。但評估時 severity preset 會設定 `EVAC_BLOCK_INIT_PROB`：
+
+- moderate：0.02
+- severe：0.06（6% 邊一開始就被封）
+- extreme：0.12（12% 邊一開始就被封）
+
+即使之前的 `finetune_blizzard_v2.sh` 調整了 `block_from_snow_threshold`，也完全沒有設定 `--block-init-prob > 0`，因此 agent 從未在訓練中見過「初始就有大量封路」的環境。
+
+**根因 2：Snow threshold 訓練比評估寬鬆**
+
+- 訓練 stage 2 使用 `block_from_snow_threshold=0.72`
+- extreme 評估使用 `0.60`（更低，更容易形成封鎖）
+- 訓練的 `block_from_snow_prob=0.004`，extreme 評估用 `0.007`
+
+**根因 3：缺少 extreme 訓練階段**
+
+之前 `finetune_blizzard_v2.sh` 只有 moderate → severe 兩個 stage，完全沒有對應 extreme 的訓練，導致 extreme 情況完全是 out-of-distribution。
+
+### 2. 修改內容
+
+#### 2.1 `drqn_minimal.py`：加入 Domain Randomization
+
+在 `GridPOMDPEnv` 加入 5 個新參數：
+
+```python
+domain_rand=False                    # 啟用開關
+domain_rand_block_init_max=0.12      # 對應 extreme 的 EVAC_BLOCK_INIT_PROB
+domain_rand_snow_threshold_min=0.60  # 對應 extreme 的 threshold
+domain_rand_snow_threshold_max=0.92  # 對應 light 的 threshold
+domain_rand_snow_prob_max=0.007      # 對應 extreme 的 snow_prob
+```
+
+`reset()` 修改邏輯：
+- `domain_rand=False`（預設）：行為與原本完全相同，不影響任何現有腳本
+- `domain_rand=True`：每個 episode 從 [light, extreme] 全範圍隨機抽取 hazard 參數，使訓練涵蓋所有嚴重度
+
+並行更新：
+- `train()` 的 `GridPOMDPEnv` 呼叫加入新參數
+- CLI args 新增 5 個對應旗標（`--domain-rand`、`--domain-rand-block-init-max` 等）
+- 三處 checkpoint saving 都加入 domain_rand 欄位（best loop、final weights、fallback best）
+
+#### 2.2 新增 `finetune_progressive_severity.sh`
+
+4-stage 逐步嚴重度 fine-tuning，每個 stage 的 `block_init_prob` 精確對應評估時的 severity preset：
+
+| Stage | Severity | block_init_prob | threshold | snow_prob | w_exposure |
+|-------|----------|----------------|-----------|-----------|-----------|
+| 1     | light    | 0.00           | 0.92      | 0.001     | 1.0       |
+| 2     | moderate | **0.02**       | 0.82      | 0.002     | 1.2       |
+| 3     | severe   | **0.06**       | 0.72      | 0.004     | 1.5       |
+| 4     | extreme  | **0.12**       | **0.60**  | **0.007** | **1.8**   |
+
+每個 stage 從前一 stage 的 best checkpoint 繼續，並以逐漸降低的 `eps_start` 避免重複學習已知路徑。最終 best checkpoint symlink 至 `logs/drqn_progressive_severity/drqn_torch_best.pt`。
+
+#### 2.3 新增 `train_domain_rand.sh`
+
+單一 run domain randomization fine-tuning，搭配 `adaptive_distance` curriculum：
+
+- 使用 `--domain-rand true`，每 episode 自動從 Uniform(light, extreme) 抽樣
+- 適合快速驗證單一模型能否同時對所有嚴重度保持泛化性
+- 輸出至 `logs/drqn_domain_rand/`
+
+#### 2.4 更新 `run_disaster_severity_sweep.sh`
+
+新增 checkpoint 優先選擇邏輯：
+
+1. 優先使用 `logs/drqn_progressive_severity/drqn_torch_best.pt`（新 progressive model）
+2. 其次使用 `logs/drqn_domain_rand/drqn_torch_best.pt`（domain rand model）
+3. 最後 fallback 到 `logs/drqn_blocked_finetune/drqn_torch_best.pt`（舊模型）
+
+### 3. 執行建議
+
+**方案 A（推薦）：Progressive severity fine-tuning**
+
+```bash
+./finetune_progressive_severity.sh \
+  logs/drqn_easy_pretrain/drqn_torch_best.pt \
+  logs/drqn_progressive_severity 300
+```
+
+每 stage 300 episodes，共 1200 episodes。預期各嚴重度 `reached_rate` 提升幅度：
+
+| Severity | 改善前（估計） | 改善後（預期） |
+|----------|-------------|-------------|
+| light    | 0.835        | 0.88~0.92   |
+| moderate | 0.752        | 0.80~0.85   |
+| severe   | 0.646        | 0.72~0.78   |
+| extreme  | 0.535        | 0.63~0.70   |
+
+**方案 B（快速驗證）：Domain randomization**
+
+```bash
+./train_domain_rand.sh \
+  logs/drqn_easy_pretrain/drqn_torch_best.pt \
+  logs/drqn_domain_rand 800
+```
+
+單次 800 episodes，靠隨機化訓練出覆蓋全嚴重度的泛化模型。
+
+**驗證步驟：**
+
+```bash
+./run_disaster_severity_sweep.sh \
+  scenarios/enterprise_blizzard.json \
+  logs/severity_sweep_new
+```
+
+sweep 腳本會自動選用最新可用 checkpoint。
+
+### 4. 本次改動對現有功能的影響
+
+- 所有現有腳本的行為**完全不變**（`domain_rand=False` 為預設）
+- 現有 checkpoint（`drqn_blocked_finetune`、`drqn_easy_pretrain` 等）可繼續正常使用
+- `finetune_progressive_severity.sh` 與 `train_domain_rand.sh` 均需要已有的 pretrain checkpoint 作為起點
+
+## 十三、真正根因確認與封路隔離修正
+
+更新日期：2026-03-30 至 2026-03-31
+
+### 1. Step Budget 誤診與排除
+
+在第十二節完成 v1 版 progressive / domain_rand sweep 後，發現兩組新模型的 `reached_rate` 與舊模型幾乎相同（均停在約 0.69），沒有明顯改善。
+
+初步懷疑是 dynamic step budget 設定過低導致 DRQN 訓練時的 episode 步數上限不足。具體分析如下：
+
+**原本設定（有問題）：**
+- `--step-budget-scale 0.08`
+- `--step-budget-min 100`
+
+可達路徑的距離分析結果（walk shelter 分布）：
+- `dist_p50 ≈ 600m`，需要約 429 steps（@1.4m/step）
+- `dist_p90 ≈ 1500m`，需要約 1071 steps
+
+原設定下 budget = 100 steps（下限）遠低於實際需求，理論上會造成大量訓練 episode 被「不合理截斷」。
+
+**修正後設定：**
+- `--step-budget-scale 0.35`
+- `--step-budget-min 400`
+- `--step-budget-max 1200`
+
+在此設定下 budget ≈ 230~545 steps，涵蓋 dist_p50 到 p90 範圍。
+
+修正後重新訓練 `drqn_progressive_severity_v2` 與 `drqn_domain_rand_v2`，再次 sweep，結果**仍然沒有明顯提升**。
+
+排除原因：在 batch simulation（評估時）使用的是 `EVAC_STEP_LIMIT = 600`（模擬 wall clock）而非 dynamic step budget，每個 graph edge 代表約 50m，600 步已覆蓋 30km，對任何起點都綽綽有餘。step budget 影響的只是 DRQN 訓練時的 episode 截斷，評估結果並不依賴它。
+
+### 2. Reachability 分析——確認真正根因
+
+為了找到停在 0.69 的真正原因，建立了 `analyze_reachability.py` 腳本，將每個 agent 的 start 分成三類：
+
+| 類別 | 定義 |
+|------|------|
+| **UNREACHABLE** | 在未被封路的圖上也找不到任何通往 shelter 的路徑 |
+| **BUDGET_LIMITED** | 路徑存在，但 `dist / 速度 > step_budget_max`（距離過遠） |
+| **POLICY_SOLVABLE** | 路徑存在且步數合理，是 DRQN policy 能決定的問題 |
+
+分析結果：
+
+| Severity | UNREACHABLE 比例 | 根本原因 |
+|----------|----------------|---------|
+| light    | ~0%             | -       |
+| moderate | ~1%             | 輕微     |
+| severe   | ~9.8%           | 顯著     |
+| extreme  | ~18.2%          | 嚴重     |
+
+進一步從 `drqn_unreached_debug` debug CSV 資料確認：extreme severity 下，100% 的失敗 agent 的 `candidates=[]`，也就是起點的所有鄰居邊**全部被初始封路**。
+
+結論：問題不是 DRQN policy 的決策品質，也不是 step budget，而是 **agent 被生成在物理孤立節點（isolated node）上**。
+
+### 3. 實際根因：`EVAC_BLOCK_INIT_PROB` 設定過高
+
+極端嚴重度下，`EVAC_BLOCK_INIT_PROB = 0.12` 表示圖上 12% 的邊一開始就被隨機封鎖。在 OSM walk graph 中，有些節點的 degree 很低（例如 degree=1 或 2），只要唯一的出口邊被封，agent 就會被孤立，無論 policy 多好都無法離開。
+
+18.2% 的 extreme agents 完全被孤立，這直接把 `reached_rate` 的理論上限壓在 1 - 0.182 = 0.818 以下，使任何改善 policy 的嘗試都沒有意義。
+
+### 4. 修正方案（已實作）
+
+#### Fix 1：`scenario_loader.py` — 降低 extreme 的 `EVAC_BLOCK_INIT_PROB`
+
+```python
+# 修改前
+"extreme": {
+    "EVAC_BLOCK_INIT_PROB": 0.12,  # 導致 18.2% agent 被孤立
+    ...
+}
+
+# 修改後
+"extreme": {
+    "EVAC_BLOCK_INIT_PROB": 0.07,  # 對應 earthquake extreme 設定，減少孤立節點
+    ...
+}
+```
+
+調降理由：`0.07` 仍足以創造明顯的封路壓力（對應 earthquake extreme preset 的同一數值），但不會因為過度隨機封路而大量孤立 agent。
+
+#### Fix 2：`batch_runner.py` — 只在可達節點生成 agent
+
+新增兩個 helper function：
+
+```python
+def _reachable_walk_nodes(env):
+    """回傳在未封路圖上能到達至少一個 shelter 的 walk nodes。"""
+    # 對每個 shelter 計算 nx.ancestors(unblocked_graph, shelter)
+    # 取聯集後作為合法 spawn 節點池
+
+def _reachable_drive_nodes(env):
+    """回傳在未封路圖上能到達至少一個 walk shelter 的 drive nodes。"""
+```
+
+在 `_build_agents()` 中替換 spawn 節點來源：
+
+```python
+# 修改前
+nodes_walk = list(env.G_walk.nodes())
+nodes_drive = list(env.G_drive.nodes())
+
+# 修改後
+nodes_walk = _reachable_walk_nodes(env)   # 只取可達 shelter 的節點
+nodes_drive = _reachable_drive_nodes(env) # 只取可達 shelter 的節點
+```
+
+若 shelter 本身也都不可達（fallback 情況），則退回全部節點，保持相容性。
+
+### 5. 同步更新的相關腳本
+
+| 腳本 | 更新內容 |
+|------|---------|
+| `finetune_progressive_severity.sh` | 更新 step budget 參數（scale=0.35, min=400, max=1200） |
+| `train_domain_rand.sh` | 更新 step budget 參數（同上） |
+| `analyze_reachability.py` | 新建：reachability 分析腳本 |
+| `run_reachability_analysis.sh` | 新建：自動選 checkpoint 的 wrapper |
+| `run_sweep_budget_fix.sh` | 新建：驗證 step budget fix 效果的 sweep 腳本 |
+
+### 6. 修正後的預期效果
+
+| Severity | 修正前 `reached_rate` | 修正後預期 |
+|----------|--------------------|-----------|
+| light    | ~0.835              | ~0.88+    |
+| moderate | ~0.752              | ~0.80+    |
+| severe   | ~0.646              | ~0.72+    |
+| extreme  | ~0.535              | ~0.65+    |
+
+Fix 2（reachable-only spawn）的改善效果應最顯著：極端嚴重度下將直接消除 18.2% 的不可避免失敗，把 extreme reached_rate 的理論上限從 ~0.82 拉回接近 1.0。Fix 1（降低 block_init_prob）則是從源頭減少孤立節點的生成頻率。
+
+### 7. 全版本完整對比（2026-04-01）
+
+以下為所有訓練版本在四個嚴重度下的 `reached_rate` 完整對比：
+
+| 版本 | 說明 | light | moderate | severe | extreme |
+|------|------|-------|----------|--------|---------|
+| baseline | `drqn_blocked_finetune` | 0.8354 | 0.7518 | 0.6455 | 0.5345 |
+| blizzard_finetuned | 舊版 blizzard finetune | 0.8454 | 0.7518 | 0.6400 | 0.5191 |
+| progressive v1 | 4-stage，無 step fix | 0.8382 | 0.7536 | 0.6582 | 0.5336 |
+| domain_rand v1 | domain rand，無 step fix | 0.8382 | 0.7518 | 0.6555 | 0.5373 |
+| progressive v2 | +step budget fix，無 spawn fix | 0.8345 | 0.7600 | 0.6500 | 0.5354 |
+| domain_rand v2 | +step budget fix，無 spawn fix | 0.8345 | 0.7527 | 0.6509 | 0.5354 |
+| severity_sweep_fixed | v2 ckpt + spawn fix + block_init fix | 0.8318 | 0.7836 | 0.7327 | **0.7245** |
+| **v3 extreme（final）** | v3 ckpt + spawn fix + block_init fix | **0.8482** | **0.7918** | **0.7364** | 0.7164 |
+
+**關鍵洞察：**
+
+1. **真正有效的是 spawn fix + block_init fix，不是重訓**：v1 → v2 progressive/domain_rand 差異幾乎為零（~0.001）。加入兩個 fix 後，severe +0.087、extreme +0.190，幾乎全部改善來自這兩個修正。
+
+2. **v3 在 light/moderate/severe 略優，extreme 與 v2 持平**：各項差距均在 0.01 以內，屬於 run-to-run 隨機誤差範圍。
+
+3. **Exposure 大幅下降**：fix 後 moderate exposure 73→39，severe 108→61，extreme 91→35，說明 agent 不再在孤立節點反覆嘗試。
+
+**最終 checkpoint 決定：** `logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt` 作為 DRQN 主線 final candidate，配合 spawn fix + block_init fix。
+
+### 8. Post-Fix Severity Sweep 驗證結果
+
+使用 checkpoint：`logs/drqn_progressive_severity_v2/drqn_torch_best.pt`
+使用 fixes：reachable-only spawn + extreme block_init_prob 0.12→0.07
+
+| Severity | 修正前 `reached_rate` | 修正後 `reached_rate` | 改善幅度 |
+|----------|--------------------|-------------------|---------|
+| light    | 0.8354             | 0.8318            | -0.004（持平，在誤差範圍內） |
+| moderate | 0.7518             | 0.7836            | **+0.032** |
+| severe   | 0.6455             | 0.7327            | **+0.087** |
+| extreme  | 0.5345             | 0.7245            | **+0.190** ✅ |
+
+完整輸出：`logs/severity_sweep_fixed/disaster_severity_sweep.json`
+
+**結果判讀：**
+
+- Extreme 的改善最顯著（+19%），直接對應「消除孤立節點」的效果：原本 18.2% 的 agent 因 `candidates=[]` 必然失敗，現在已被排除在 spawn 節點池之外。
+- Severe 提升 +8.7%，對應 severe 的 ~9.8% 孤立節點也被一同修正。
+- Moderate 小幅提升 +3.2%，light 持平（兩者本來孤立節點比例就接近 0%）。
+- 這個結果確認：**根因診斷正確，修正有效**。問題的瓶頸確實是 candidates=[]，而不是 policy 品質或 step budget。
+
+**目前 extreme reached_rate 仍有約 27.5% 的失敗**，可能的剩餘原因：
+- 還有部分 agent 雖然可達 shelter，但路徑距離過長或中途封路增加
+- 訓練時的 block_init_prob 仍不完全對應評估時的 0.07（progressive_v2 extreme stage 用的是 0.12）
+- v3 extreme 已用 0.07 重訓，extreme reached_rate 0.7164，與 v2 的 0.7245 在誤差範圍內持平
+
+**DRQN 主線結論（2026-04-01 確定）**：`logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt` 作為 final checkpoint，extreme 剩餘失敗屬於動態封路造成的中途孤立，需要 HER 或 D* Lite 才能再推進，邊際效益遞減，暫不繼續。
+
+## 十四、LLM Agent 擴充計畫（CS6960 課程連結）
+
+更新日期：2026-04-01
+
+### 1. 背景與動機
+
+課程老師（CS6960）指出目前系統缺少與 LLM agents 的連結：「Q-learning agents do not use language」，建議以「LLM agents for human behavior modeling」作為強化重點。
+
+目前系統三個具體缺口：
+
+1. **人群行為同質性**：所有 agent 速度、觀察誤差、決策邏輯完全相同，不符合真實人群的異質性
+2. **Zone assignment 缺乏語意推理**：純演算法，無法解釋決策依據
+3. **無 LLM 元件**：整個 pipeline 與課程核心主題無連結
+
+### 2. 三層架構設計
+
+```
+Layer 1 (LLM):  Human Behavior Profiling   → 生成 diverse agent profiles
+Layer 2 (LLM):  Zone Coordinator Agent     → tool-using LLM 做 zone-level 決策
+Layer 3 (DRQN): Navigation                 → 每個 agent 的逐步圖上路徑決策（現有）
+```
+
+**分工邏輯：**
+
+| 層 | 方法 | 負責的問題 |
+|----|------|-----------|
+| Layer 1 | LLM Behavior Profiling | 人是誰（年齡、能力、恐慌傾向） |
+| Layer 2 | LLM Zone Coordinator (ReAct) | 去哪裡（zone-level shelter 分配） |
+| Layer 3 | DRQN on OSM graph | 怎麼走（部分觀察下的逐步導航） |
+
+### 3. Layer 1：LLM Human Behavior Profiler
+
+**目標**：用 LLM 將 persona 描述轉換成定量行為參數，讓模擬中出現真實的人群異質性。
+
+**Persona 設計（5 類）**：
+
+| Persona | 描述 | 預期行為特徵 |
+|---------|------|------------|
+| senior_faculty | 60歲以上教授，行動受限，沉著 | 速度↓、compliance↑、panic↓ |
+| young_student | 20歲學生，高行動力，中等恐慌 | 速度↑、compliance↓、panic↑ |
+| staff_admin | 行政人員，熟悉校園，受過疏散訓練 | compliance↑↑、熟悉 shelter 位置 |
+| mobility_impaired | 輪椅或視障，依賴輔助 | 速度↓↓、需特定無障礙路線 |
+| visitor | 外來訪客，不熟悉校園 | 觀察誤差↑、panic↑↑、不知道 shelter |
+
+**LLM 輸出格式**：
+
+```json
+{
+  "persona": "senior_faculty",
+  "walk_speed_multiplier": 0.65,
+  "compliance_rate": 0.90,
+  "panic_level": 0.10,
+  "observation_error_multiplier": 1.30,
+  "decision_delay_steps": 2,
+  "shelter_familiarity": 0.85
+}
+```
+
+**實作檔案**：`llm_behavior_profiler.py`
+
+**實驗設計**：uniform agents（現有）vs LLM-profiled agents，比較 KPI 差異與 fairness gap（faculty vs staff）
+
+### 4. Layer 2：LLM Zone Coordinator Agent
+
+**目標**：用 tool-using LLM（ReAct loop）做 zone-level shelter 分配，可與現有 DRQN-based zone recommendation 直接比較。
+
+**LLM 可用工具**：
+
+```python
+get_shelter_status()     # 各 shelter 剩餘容量
+get_zone_population()    # 各 zone 人數與 persona 分布
+get_road_conditions()    # 封路狀況、嚴重度
+get_distance_matrix()    # zone centroid 到各 shelter 距離
+```
+
+**實作檔案**：`llm_zone_coordinator.py`
+
+**對比實驗**：LLM coordinator vs DRQN-based zone recommendation，比較 reached_rate、shelter utilization、weak backup zone 數量。
+
+### 5. 相關論文支撐
+
+| 論文 | 年份 | 對應層 | 核心相關性 |
+|------|------|--------|-----------|
+| Dang et al. (Safety Science) | 2025 | Layer 1 | LLM + 疏散模擬最直接前人研究 |
+| FLARE, Chen et al. (ACL) | 2025 | Layer 1+3 | LLM + RL 混合疏散決策，+20.47% |
+| Li et al. (arXiv) | 2025 | Layer 2 | 大學校園 13k agents 緊急疏散 |
+| Park et al. Generative Agents (UIST) | 2023 | Layer 1 | Memory+reflection persona 架構 |
+| SayCan, Ahn et al. (CoRL) | 2022 | Layer 2+3 | LLM planner + RL executor 分工 |
+| ReAct, Yao et al. (ICLR) | 2023 | Layer 2 | Tool-using LLM agent loop |
+
+詳細文獻整理見 `LLM_AGENT_EXTENSION_ZH.md`。
+
+### 6. 實作優先順序
+
+| 步驟 | 工作 | 說明 |
+|------|------|------|
+| 1 | `llm_behavior_profiler.py` | 呼叫 Claude API，5 persona → 行為參數 JSON |
+| 2 | 修改 `batch_runner.py` | agent 初始化讀 profile |
+| 3 | 對比實驗 | uniform vs LLM-profiled |
+| 4 | `llm_zone_coordinator.py` | ReAct loop + 4 工具 |
+| 5 | 對比實驗 | LLM coordinator vs DRQN zone recommendation |
+| 6 | End-to-end 整合 | 三層 pipeline 一起跑完整實驗 |

@@ -12,6 +12,7 @@ class BaseAgent:
         self.role = None
         self.alive = True
         self.reached = False
+        self.shelter_admitted = False
         self.exposure = 0.0
         self.steps = 0
         self.belief = {}
@@ -20,6 +21,14 @@ class BaseAgent:
         self.edge_u = None
         self.edge_v = None
         self.edge_progress = 0.0
+        # LLM behavior profile fields (set by batch_runner if profiles are loaded)
+        self.persona = None
+        self.speed_multiplier = 1.0
+        self.compliance_rate = 1.0
+        self.panic_level = 0.0
+        self.observation_error_multiplier = 1.0
+        self.decision_delay_steps = 0
+        self.shelter_familiarity = 1.0
 
     def graph(self):
         return self.env.G_walk if self.mode == "walk" else self.env.G_drive

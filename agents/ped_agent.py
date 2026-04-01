@@ -8,4 +8,4 @@ class PedAgent(BaseAgent):
         super().__init__(aid, start, env, mode="walk")
 
     def step(self, goal):
-        self.move_along_path(goal, config.EVAC_SPEED_WALK)
+        self.move_along_path(goal, config.EVAC_SPEED_WALK * self.speed_multiplier)
