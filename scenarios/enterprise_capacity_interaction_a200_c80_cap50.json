@@ -1,0 +1,22 @@
+{
+  "name": "enterprise_capacity_interaction_a200_c80_cap50",
+  "description": "Capacity-aware scaling with interaction-aware density reranking enabled: 200 pedestrians, 80 cars, and 50 slots per shelter.",
+  "disaster_type": "baseline",
+  "baseline_policy": "drqn",
+  "profile": null,
+  "num_runs": 8,
+  "base_seed": 20260601,
+  "policies": [
+    "drqn"
+  ],
+  "config_overrides": {
+    "EVAC_PED_COUNT": 200,
+    "EVAC_CAR_COUNT": 80,
+    "EVAC_BUS_COUNT": 8,
+    "EVAC_STEP_LIMIT": 1100,
+    "EVAC_BLOCK_PROB": 0.08,
+    "EVAC_SHELTER_CAPACITY_ENABLED": true,
+    "EVAC_SHELTER_CAPACITY_PER_SITE": 50,
+    "EVAC_INTERACTION_DENSITY_ENABLED": true
+  }
+}

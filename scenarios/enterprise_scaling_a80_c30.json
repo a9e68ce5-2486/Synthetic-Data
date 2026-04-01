@@ -1,0 +1,19 @@
+{
+  "name": "enterprise_scaling_a80_c30",
+  "description": "Single-agent scaling scenario with 80 pedestrians and 30 cars.",
+  "disaster_type": "baseline",
+  "baseline_policy": "drqn",
+  "profile": null,
+  "num_runs": 10,
+  "base_seed": 20260311,
+  "policies": [
+    "drqn"
+  ],
+  "config_overrides": {
+    "EVAC_PED_COUNT": 80,
+    "EVAC_CAR_COUNT": 30,
+    "EVAC_BUS_COUNT": 8,
+    "EVAC_STEP_LIMIT": 700,
+    "EVAC_BLOCK_PROB": 0.08
+  }
+}

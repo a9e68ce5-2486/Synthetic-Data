@@ -1,0 +1,21 @@
+{
+  "name": "enterprise_capacity_a300_c120_cap70",
+  "description": "Capacity-aware scaling with 300 pedestrians, 120 cars, and 70 slots per shelter.",
+  "disaster_type": "baseline",
+  "baseline_policy": "drqn",
+  "profile": null,
+  "num_runs": 6,
+  "base_seed": 20260611,
+  "policies": [
+    "drqn"
+  ],
+  "config_overrides": {
+    "EVAC_PED_COUNT": 300,
+    "EVAC_CAR_COUNT": 120,
+    "EVAC_BUS_COUNT": 8,
+    "EVAC_STEP_LIMIT": 1300,
+    "EVAC_BLOCK_PROB": 0.08,
+    "EVAC_SHELTER_CAPACITY_ENABLED": true,
+    "EVAC_SHELTER_CAPACITY_PER_SITE": 70
+  }
+}

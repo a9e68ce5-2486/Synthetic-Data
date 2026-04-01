@@ -5,6 +5,7 @@ SUPPORTED_POLICIES = {
     "round_robin",
     "nearest",
     "priority_faculty",
+    "drqn",
 }
 
 
@@ -39,6 +40,10 @@ def select_goal(agent, graph, shelters, policy_name, assignment_state):
         # Staff are balanced to reduce congestion around popular shelters.
         least_loaded = min(shelters, key=lambda s: assignment_state.get(s, 0))
         return least_loaded
+    if policy_name == "drqn":
+        # DRQN currently controls step-level pedestrian movement; shelter target
+        # is initialized with nearest shelter for stable endpoint semantics.
+        return _nearest_goal(agent, graph, shelters)
     # Default: stable deterministic baseline.
     idx = (agent.id - 1) % len(shelters)
     return shelters[idx]

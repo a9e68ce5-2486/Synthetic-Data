@@ -22,17 +22,26 @@ class EvacEnv:
         self.snow_depth_walk = {}
         self.snow_depth_drive = {}
         self.shelters = set()
+        self.shelter_capacity = {}
+        self.shelter_occupancy = {}
         self._build_graph()
         self._init_hazards()
         self._init_shelters()
 
     def _build_graph(self):
-        if config.EVAC_USE_OSM and ox is not None:
-            ok = self._build_from_osm()
-            if ok:
-                return
-        # fallback: small grid
-        self._build_grid()
+        if not config.EVAC_USE_OSM:
+            raise RuntimeError(
+                "Fallback grid has been removed. Set EVAC_USE_OSM=True and provide a valid OSM setup."
+            )
+        if ox is None:
+            raise RuntimeError(
+                "OSMnx is unavailable. Install osmnx and retry; fallback grid is no longer supported."
+            )
+        ok = self._build_from_osm()
+        if not ok:
+            raise RuntimeError(
+                "OSM graph build failed; fallback grid is no longer supported."
+            )
 
     def _build_from_osm(self):
         if ox is not None:
@@ -118,28 +127,6 @@ class EvacEnv:
             self.G_drive.add_edge(u, v, weight=length, slope=slope)
         return True
 
-    def _build_grid(self):
-        size = 6
-        step = 120.0
-        for i in range(size):
-            for j in range(size):
-                n = (i, j)
-                self.pos[n] = (i * step, j * step)
-                self.G_walk.add_node(n)
-                self.G_drive.add_node(n)
-        for i in range(size):
-            for j in range(size):
-                if i + 1 < size:
-                    self.G_walk.add_edge((i, j), (i + 1, j), weight=step, slope=0.05)
-                    self.G_walk.add_edge((i + 1, j), (i, j), weight=step, slope=0.05)
-                    self.G_drive.add_edge((i, j), (i + 1, j), weight=step, slope=0.05)
-                    self.G_drive.add_edge((i + 1, j), (i, j), weight=step, slope=0.05)
-                if j + 1 < size:
-                    self.G_walk.add_edge((i, j), (i, j + 1), weight=step, slope=0.05)
-                    self.G_walk.add_edge((i, j + 1), (i, j), weight=step, slope=0.05)
-                    self.G_drive.add_edge((i, j), (i, j + 1), weight=step, slope=0.05)
-                    self.G_drive.add_edge((i, j + 1), (i, j), weight=step, slope=0.05)
-
     def _init_hazards(self):
         self.blocked_edges_walk.clear()
         self.blocked_edges_drive.clear()
@@ -159,6 +146,27 @@ class EvacEnv:
     def _init_shelters(self):
         nodes = list(self.G_walk.nodes())
         self.shelters = shelter.select_shelters(nodes, config.EVAC_SHELTER_COUNT)
+        default_capacity = int(getattr(config, "EVAC_SHELTER_CAPACITY_PER_SITE", 999999))
+        self.shelter_capacity = {s: default_capacity for s in self.shelters}
+        self.shelter_occupancy = {s: 0 for s in self.shelters}
+
+    def shelter_has_capacity(self, shelter_node):
+        if not getattr(config, "EVAC_SHELTER_CAPACITY_ENABLED", False):
+            return True
+        if shelter_node not in self.shelter_capacity:
+            return False
+        return self.shelter_occupancy.get(shelter_node, 0) < self.shelter_capacity.get(shelter_node, 0)
+
+    def admit_to_shelter(self, shelter_node):
+        if shelter_node not in self.shelter_capacity:
+            return False
+        if not self.shelter_has_capacity(shelter_node):
+            return False
+        self.shelter_occupancy[shelter_node] = self.shelter_occupancy.get(shelter_node, 0) + 1
+        return True
+
+    def available_shelters(self):
+        return [s for s in self.shelters if self.shelter_has_capacity(s)]
 
     def step_hazards(self):
         if not getattr(config, "EVAC_SNOW_DYNAMIC", False):

@@ -294,9 +294,31 @@ def _write_step_csv(path, step_rows):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["step", "alive", "reached", "avg_exposure"])
+        w.writerow([
+            "step",
+            "alive",
+            "reached",
+            "ped_reached",
+            "car_reached",
+            "ped_stay",
+            "ped_selected_move",
+            "ped_motion",
+            "ped_node_changed",
+            "avg_exposure",
+        ])
         for row in step_rows:
-            w.writerow([row["step"], row["alive"], row["reached"], f"{row['avg_exposure']:.3f}"])
+            w.writerow([
+                row["step"],
+                row["alive"],
+                row["reached"],
+                row.get("ped_reached", ""),
+                row.get("car_reached", ""),
+                row.get("ped_stay", ""),
+                row.get("ped_selected_move", ""),
+                row.get("ped_motion", ""),
+                row.get("ped_node_changed", ""),
+                f"{row['avg_exposure']:.3f}",
+            ])
 
 
 def main():
@@ -309,12 +331,21 @@ def main():
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument("--visual-speed-scale", type=float, default=6.0)
     parser.add_argument("--log-every", type=int, default=5)
+    parser.add_argument("--drqn-checkpoint", default=None, help="Path to DRQN checkpoint (.pt) for --policy drqn")
+    parser.add_argument("--drqn-device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
+    parser.add_argument("--drqn-max-neighbors", type=int, default=None)
     args = parser.parse_args()
 
     scenario = load_scenario(args.scenario)
 
     if args.mode == "batch":
-        runs_csv, summary_json, management_txt, policy_summary = run_batch(scenario, args.output_dir)
+        runs_csv, summary_json, management_txt, policy_summary = run_batch(
+            scenario,
+            args.output_dir,
+            drqn_checkpoint=args.drqn_checkpoint,
+            drqn_device=args.drqn_device,
+            drqn_max_neighbors=args.drqn_max_neighbors,
+        )
         print(f"[batch] runs csv: {runs_csv}")
         print(f"[batch] summary json: {summary_json}")
         print(f"[batch] management summary: {management_txt}")
@@ -343,20 +374,56 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     metrics_file = open(metrics_path, "w", newline="", encoding="utf-8")
     w = csv.writer(metrics_file)
-    w.writerow(["step", "alive", "reached", "avg_exposure"])
+    w.writerow([
+        "step",
+        "alive",
+        "reached",
+        "ped_reached",
+        "car_reached",
+        "ped_stay",
+        "ped_selected_move",
+        "ped_motion",
+        "ped_node_changed",
+        "avg_exposure",
+    ])
 
     def _on_step(row):
-        w.writerow([row["step"], row["alive"], row["reached"], f"{row['avg_exposure']:.3f}"])
+        w.writerow([
+            row["step"],
+            row["alive"],
+            row["reached"],
+            row.get("ped_reached", ""),
+            row.get("car_reached", ""),
+            row.get("ped_stay", ""),
+            row.get("ped_selected_move", ""),
+            row.get("ped_motion", ""),
+            row.get("ped_node_changed", ""),
+            f"{row['avg_exposure']:.3f}",
+        ])
         if row["step"] == -1:
             print(
                 f"[step   -1] alive={row['alive']:3d} "
-                f"reached={row['reached']:3d} avg_exposure={row['avg_exposure']:.3f}",
+                f"reached={row['reached']:3d} "
+                f"ped={row.get('ped_reached', 0):3d} "
+                f"car={row.get('car_reached', 0):3d} "
+                f"stay={row.get('ped_stay', 0):3d} "
+                f"sel={row.get('ped_selected_move', 0):3d} "
+                f"motion={row.get('ped_motion', 0):3d} "
+                f"nodechg={row.get('ped_node_changed', 0):3d} "
+                f"avg_exposure={row['avg_exposure']:.3f}",
                 flush=True,
             )
         elif args.log_every > 0 and row["step"] % args.log_every == 0:
             print(
                 f"[step {row['step']:4d}] alive={row['alive']:3d} "
-                f"reached={row['reached']:3d} avg_exposure={row['avg_exposure']:.3f}",
+                f"reached={row['reached']:3d} "
+                f"ped={row.get('ped_reached', 0):3d} "
+                f"car={row.get('car_reached', 0):3d} "
+                f"stay={row.get('ped_stay', 0):3d} "
+                f"sel={row.get('ped_selected_move', 0):3d} "
+                f"motion={row.get('ped_motion', 0):3d} "
+                f"nodechg={row.get('ped_node_changed', 0):3d} "
+                f"avg_exposure={row['avg_exposure']:.3f}",
                 flush=True,
             )
 
@@ -370,6 +437,9 @@ def main():
             draw_hooks=hooks,
             step_callback=_on_step,
             emit_initial_state=True,
+            drqn_checkpoint=args.drqn_checkpoint,
+            drqn_device=args.drqn_device,
+            drqn_max_neighbors=args.drqn_max_neighbors,
         )
     finally:
         metrics_file.close()
@@ -378,6 +448,19 @@ def main():
         _write_step_csv(metrics_path, step_rows)
     print(f"[interactive] step metrics: {metrics_path}")
     print(f"[interactive] summary: {summary}")
+    drqn_debug = summary.get("drqn_unreached_debug")
+    if drqn_debug:
+        print("[interactive] unreached DRQN pedestrians:")
+        for item in drqn_debug:
+            print(
+                f"  agent={item['agent_id']} node={item['node']} "
+                f"goal={item['goal']} target={item['current_target']} "
+                f"committed_next={item['committed_next']}"
+            )
+            print(f"    candidates={item['candidates']}")
+            print(f"    action_mask={item['action_mask']}")
+            print(f"    q_values={item['q_values']}")
+            print(f"    masked_q_values={item['masked_q_values']}")
 
 
 if __name__ == "__main__":

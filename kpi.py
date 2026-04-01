@@ -11,7 +11,7 @@ def _percentile_reach_step(reached_steps, total_agents, q):
     return reached_steps[threshold - 1]
 
 
-def summarize_run(step_rows, peds, cars, edge_counts, step_limit, scenario_name, seed, policy_name):
+def summarize_run(step_rows, peds, cars, edge_counts, step_limit, scenario_name, seed, policy_name, extra_metrics=None):
     agents = list(peds) + list(cars)
     total = len(agents)
     reached = [a for a in agents if a.reached]
@@ -28,7 +28,7 @@ def summarize_run(step_rows, peds, cars, edge_counts, step_limit, scenario_name,
     top_edges_str = ";".join(f"{u}->{v}:{cnt}" for (u, v), cnt in top_edges)
 
     final_step = step_rows[-1] if step_rows else {"alive": len(alive), "reached": len(reached), "avg_exposure": avg_exp}
-    return {
+    summary = {
         "scenario": scenario_name,
         "seed": seed,
         "policy": policy_name,
@@ -46,6 +46,9 @@ def summarize_run(step_rows, peds, cars, edge_counts, step_limit, scenario_name,
         "reach_rate_gap": round(faculty_reached_rate - staff_reached_rate, 4),
         "top_bottlenecks": top_edges_str,
     }
+    if extra_metrics:
+        summary.update(extra_metrics)
+    return summary
 
 
 def aggregate_policy_rows(rows):
@@ -57,10 +60,21 @@ def aggregate_policy_rows(rows):
         return sum(values) / len(values)
 
     t95_values = [r["t95_step"] for r in rows if r["t95_step"] is not None]
+    t90_values = [r["t90_step"] for r in rows if r["t90_step"] is not None]
+    faculty_values = [r["faculty_reached_rate"] for r in rows if r.get("faculty_reached_rate") is not None]
+    staff_values = [r["staff_reached_rate"] for r in rows if r.get("staff_reached_rate") is not None]
+    gap_values = [r["reach_rate_gap"] for r in rows if r.get("reach_rate_gap") is not None]
+    reassign_values = [r["shelter_reassignments"] for r in rows if r.get("shelter_reassignments") is not None]
     return {
         "runs": len(rows),
         "avg_reached_rate": round(_avg("reached_rate"), 4),
         "avg_alive_rate": round(_avg("alive_rate"), 4),
         "avg_exposure_total": round(_avg("avg_exposure_total"), 4),
+        "avg_t90_step": round(sum(t90_values) / len(t90_values), 2) if t90_values else None,
         "avg_t95_step": round(sum(t95_values) / len(t95_values), 2) if t95_values else None,
+        "avg_faculty_reached_rate": round(sum(faculty_values) / len(faculty_values), 4) if faculty_values else None,
+        "avg_staff_reached_rate": round(sum(staff_values) / len(staff_values), 4) if staff_values else None,
+        "avg_reach_rate_gap": round(sum(gap_values) / len(gap_values), 4) if gap_values else None,
+        "avg_shelter_reassignments": round(sum(reassign_values) / len(reassign_values), 2) if reassign_values else None,
+        "shelter_capacity_enabled": any(bool(r.get("shelter_capacity_enabled", False)) for r in rows),
     }

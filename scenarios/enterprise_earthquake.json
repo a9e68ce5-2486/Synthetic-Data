@@ -8,8 +8,7 @@
   "base_seed": 20260227,
   "policies": [
     "round_robin",
-    "nearest",
-    "priority_faculty"
+    "nearest"
   ],
   "config_overrides": {
     "EVAC_PED_COUNT": 40,

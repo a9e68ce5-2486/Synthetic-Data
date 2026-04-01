@@ -1,6 +1,7 @@
 {
   "name": "compound_profile",
   "disaster_type": "compound",
+  "disaster_severity": "severe",
   "description": "Compound event: structural damage plus snow/visibility constraints.",
   "config_overrides": {
     "EVAC_BLOCK_PROB": 0.28,

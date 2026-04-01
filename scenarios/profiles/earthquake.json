@@ -1,6 +1,8 @@
 {
   "name": "earthquake_profile",
   "disaster_type": "earthquake",
+  "disaster_severity": "severe",
+  "earthquake_magnitude": 8.0,
   "description": "High uncertainty with structural blockages and disrupted routes.",
   "config_overrides": {
     "EVAC_BLOCK_PROB": 0.22,
