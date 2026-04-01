@@ -13,18 +13,35 @@ if os.path.exists(_AGENT_PROFILES_PATH):
         _AGENT_PROFILES = json.load(_f)
 
 # Persona assignment weights: maps role → list of (persona, weight)
+# Reflects University of Utah population composition across 4 role categories
 _PERSONA_WEIGHTS = {
+    "student": [
+        ("young_student",         0.30),
+        ("freshman_student",      0.20),
+        ("graduate_student",      0.20),
+        ("international_student", 0.10),
+        ("student_athlete",       0.07),
+        ("student_with_anxiety",  0.08),
+        ("part_time_student",     0.05),
+    ],
     "faculty": [
-        ("senior_faculty", 0.55),
-        ("staff_admin",    0.25),
-        ("mobility_impaired", 0.20),
+        ("senior_faculty",   0.45),
+        ("junior_faculty",   0.35),
+        ("adjunct_instructor", 0.20),
     ],
     "staff": [
-        ("staff_admin",    0.50),
-        ("young_student",  0.10),
-        ("senior_faculty", 0.20),
-        ("mobility_impaired", 0.10),
-        ("visitor",        0.10),
+        ("staff_admin",        0.30),
+        ("facilities_staff",   0.20),
+        ("campus_security",    0.10),
+        ("healthcare_staff",   0.15),
+        ("research_scientist", 0.15),
+        ("it_staff",           0.10),
+    ],
+    "visitor": [
+        ("visitor",                        0.35),
+        ("mobility_impaired",              0.15),
+        ("conference_attendee",            0.30),
+        ("prospective_student_with_parent", 0.20),
     ],
 }
 
@@ -510,16 +527,18 @@ def _build_agents(env):
     shuttles = []
     nodes_walk = _reachable_walk_nodes(env)
     nodes_drive = _reachable_drive_nodes(env)
+    _roles = list(config.EVAC_ROLE_WEIGHTS.keys())
+    _role_w = list(config.EVAC_ROLE_WEIGHTS.values())
     for i in range(config.EVAC_PED_COUNT):
         start = random.choice(nodes_walk)
         ped = PedAgent(i + 1, start, env)
-        ped.role = "faculty" if random.random() < config.EVAC_FACULTY_RATIO else "staff"
+        ped.role = random.choices(_roles, weights=_role_w, k=1)[0]
         _apply_persona(ped, _assign_persona(ped.role))
         peds.append(ped)
     for i in range(config.EVAC_CAR_COUNT):
         start = random.choice(nodes_drive)
         car = CarAgent(i + 1, start, env)
-        car.role = "faculty" if random.random() < config.EVAC_FACULTY_RATIO else "staff"
+        car.role = random.choices(_roles, weights=_role_w, k=1)[0]
         _apply_persona(car, _assign_persona(car.role))
         cars.append(car)
     route, stops = build_shuttle_route(env)

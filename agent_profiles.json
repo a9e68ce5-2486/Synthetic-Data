@@ -1,4 +1,60 @@
 {
+  "young_student": {
+    "walk_speed_multiplier": 1.2,
+    "compliance_rate": 0.6,
+    "panic_level": 0.4,
+    "observation_error_multiplier": 1.5,
+    "decision_delay_steps": 2,
+    "shelter_familiarity": 0.4
+  },
+  "freshman_student": {
+    "walk_speed_multiplier": 1.2,
+    "compliance_rate": 0.4,
+    "panic_level": 0.8,
+    "observation_error_multiplier": 2.5,
+    "decision_delay_steps": 3,
+    "shelter_familiarity": 0.2
+  },
+  "graduate_student": {
+    "walk_speed_multiplier": 1.2,
+    "compliance_rate": 0.9,
+    "panic_level": 0.1,
+    "observation_error_multiplier": 0.8,
+    "decision_delay_steps": 0,
+    "shelter_familiarity": 0.8
+  },
+  "international_student": {
+    "walk_speed_multiplier": 1.1,
+    "compliance_rate": 0.4,
+    "panic_level": 0.6,
+    "observation_error_multiplier": 2.2,
+    "decision_delay_steps": 2,
+    "shelter_familiarity": 0.2
+  },
+  "student_athlete": {
+    "walk_speed_multiplier": 1.4,
+    "compliance_rate": 0.6,
+    "panic_level": 0.1,
+    "observation_error_multiplier": 0.8,
+    "decision_delay_steps": 0,
+    "shelter_familiarity": 0.8
+  },
+  "student_with_anxiety": {
+    "walk_speed_multiplier": 0.8,
+    "compliance_rate": 0.6,
+    "panic_level": 0.85,
+    "observation_error_multiplier": 2.2,
+    "decision_delay_steps": 3,
+    "shelter_familiarity": 0.4
+  },
+  "part_time_student": {
+    "walk_speed_multiplier": 0.8,
+    "compliance_rate": 0.6,
+    "panic_level": 0.1,
+    "observation_error_multiplier": 1.5,
+    "decision_delay_steps": 3,
+    "shelter_familiarity": 0.3
+  },
   "senior_faculty": {
     "walk_speed_multiplier": 0.6,
     "compliance_rate": 0.95,
@@ -7,11 +63,19 @@
     "decision_delay_steps": 0,
     "shelter_familiarity": 0.9
   },
-  "young_student": {
+  "junior_faculty": {
     "walk_speed_multiplier": 1.2,
+    "compliance_rate": 0.9,
+    "panic_level": 0.1,
+    "observation_error_multiplier": 0.8,
+    "decision_delay_steps": 0,
+    "shelter_familiarity": 0.6
+  },
+  "adjunct_instructor": {
+    "walk_speed_multiplier": 1.0,
     "compliance_rate": 0.6,
-    "panic_level": 0.4,
-    "observation_error_multiplier": 1.5,
+    "panic_level": 0.1,
+    "observation_error_multiplier": 1.2,
     "decision_delay_steps": 2,
     "shelter_familiarity": 0.4
   },
@@ -23,17 +87,73 @@
     "decision_delay_steps": 0,
     "shelter_familiarity": 0.95
   },
+  "facilities_staff": {
+    "walk_speed_multiplier": 1.2,
+    "compliance_rate": 0.95,
+    "panic_level": 0.05,
+    "observation_error_multiplier": 0.8,
+    "decision_delay_steps": 0,
+    "shelter_familiarity": 0.95
+  },
+  "campus_security": {
+    "walk_speed_multiplier": 1.2,
+    "compliance_rate": 1.0,
+    "panic_level": 0.0,
+    "observation_error_multiplier": 0.5,
+    "decision_delay_steps": 0,
+    "shelter_familiarity": 1.0
+  },
+  "healthcare_staff": {
+    "walk_speed_multiplier": 0.8,
+    "compliance_rate": 0.95,
+    "panic_level": 0.1,
+    "observation_error_multiplier": 0.8,
+    "decision_delay_steps": 0,
+    "shelter_familiarity": 0.95
+  },
+  "research_scientist": {
+    "walk_speed_multiplier": 1.0,
+    "compliance_rate": 0.9,
+    "panic_level": 0.1,
+    "observation_error_multiplier": 1.0,
+    "decision_delay_steps": 2,
+    "shelter_familiarity": 0.4
+  },
+  "it_staff": {
+    "walk_speed_multiplier": 1.0,
+    "compliance_rate": 0.9,
+    "panic_level": 0.1,
+    "observation_error_multiplier": 0.8,
+    "decision_delay_steps": 0,
+    "shelter_familiarity": 0.8
+  },
+  "visitor": {
+    "walk_speed_multiplier": 0.8,
+    "compliance_rate": 0.6,
+    "panic_level": 0.8,
+    "observation_error_multiplier": 2.5,
+    "decision_delay_steps": 3,
+    "shelter_familiarity": 0.1
+  },
   "mobility_impaired": {
-    "walk_speed_multiplier": 0.4,
+    "walk_speed_multiplier": 0.3,
     "compliance_rate": 0.9,
     "panic_level": 0.6,
     "observation_error_multiplier": 1.5,
     "decision_delay_steps": 2,
     "shelter_familiarity": 0.4
   },
-  "visitor": {
-    "walk_speed_multiplier": 0.8,
+  "conference_attendee": {
+    "walk_speed_multiplier": 1.0,
     "compliance_rate": 0.6,
+    "panic_level": 0.1,
+    "observation_error_multiplier": 1.5,
+    "decision_delay_steps": 2,
+    "shelter_familiarity": 0.2
+  },
+  "prospective_student_with_parent": {
+    "walk_speed_multiplier": 0.6,
+    "compliance_rate": 0.8,
     "panic_level": 0.7,
     "observation_error_multiplier": 2.2,
     "decision_delay_steps": 3,

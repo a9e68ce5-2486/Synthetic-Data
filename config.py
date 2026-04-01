@@ -69,7 +69,15 @@ EVAC_BUS_SAMPLE_EVERY = 20
 EVAC_BUS_SNAP_MAX_M = 250.0
 EVAC_SHUTTLE_DWELL_STEPS = 3
 
-# Population composition (Faculty vs Staff) from official figures
+# Population composition by role (University of Utah approximate figures)
+# student ~60%, faculty ~15%, staff ~20%, visitor ~5%
+EVAC_ROLE_WEIGHTS = {
+    "student":  0.60,
+    "faculty":  0.15,
+    "staff":    0.20,
+    "visitor":  0.05,
+}
+# Legacy aliases kept for backward compatibility
 EVAC_FACULTY_RATIO = 0.25
 EVAC_STAFF_RATIO = 0.75
 

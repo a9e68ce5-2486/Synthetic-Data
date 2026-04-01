@@ -1,13 +1,13 @@
 """
 llm_behavior_profiler.py
 
-Uses a Gemini LLM to generate quantitative behavior parameters for each
+Uses a Groq LLM to generate quantitative behavior parameters for each
 evacuee persona. The LLM reasons from a natural language persona description
 to produce a JSON profile that is consumed by batch_runner.py.
 
 Usage:
     python llm_behavior_profiler.py --api-key YOUR_KEY --output agent_profiles.json
-    python llm_behavior_profiler.py --output agent_profiles.json  # uses GEMINI_API_KEY env var
+    python llm_behavior_profiler.py --output agent_profiles.json  # uses GROQ_API_KEY env var
 
 Output format (agent_profiles.json):
     {
@@ -30,23 +30,108 @@ from groq import Groq
 # ---------------------------------------------------------------------------
 
 PERSONAS = {
-    "senior_faculty": (
-        "A senior faculty member in their early 60s with mild mobility limitations "
-        "(slow gait, occasional knee pain). They are calm under pressure, know the "
-        "campus well, and have attended multiple fire drills. They are likely to "
-        "follow official instructions and help others around them."
-    ),
+    # ── Students (7) ──────────────────────────────────────────────────────────
     "young_student": (
         "An undergraduate student in their early 20s, physically fit and highly "
         "mobile. They are somewhat prone to panic in unexpected emergencies, may "
         "hesitate before following instructions, and are not very familiar with "
         "all shelter locations on campus."
     ),
+    "freshman_student": (
+        "A first-year undergraduate student in their late teens, new to the campus. "
+        "They are physically fit but highly anxious in emergencies, have very little "
+        "knowledge of shelter locations, and are likely to freeze or follow the crowd "
+        "rather than follow official instructions."
+    ),
+    "graduate_student": (
+        "A graduate student or PhD candidate in their mid-to-late 20s who has been "
+        "on campus for several years. They are calm, physically fit, and moderately "
+        "familiar with shelter locations. They tend to follow instructions and help "
+        "nearby people when evacuating."
+    ),
+    "international_student": (
+        "An international student in their early 20s who may have language barriers "
+        "and is unfamiliar with the local emergency procedures. They are physically "
+        "fit but highly anxious, may misread signage, and are likely to follow others "
+        "rather than official directions."
+    ),
+    "student_athlete": (
+        "A varsity athlete in their early 20s, extremely physically fit and fast. "
+        "They are confident and low-panic, but may take non-standard routes or act "
+        "independently rather than following official shelter assignments."
+    ),
+    "student_with_anxiety": (
+        "An undergraduate student with a diagnosed anxiety disorder. They are "
+        "physically capable but experience very high panic in emergency situations, "
+        "may freeze, take longer to start moving, and have difficulty processing "
+        "instructions under stress."
+    ),
+    "part_time_student": (
+        "A part-time or evening student in their 30s who attends campus only a few "
+        "days per week. They are physically able but have limited familiarity with "
+        "shelter locations and campus layout. They are calm but slow to respond due "
+        "to uncertainty about procedures."
+    ),
+    # ── Faculty (3) ───────────────────────────────────────────────────────────
+    "senior_faculty": (
+        "A senior faculty member in their early 60s with mild mobility limitations "
+        "(slow gait, occasional knee pain). They are calm under pressure, know the "
+        "campus well, and have attended multiple fire drills. They are likely to "
+        "follow official instructions and help others around them."
+    ),
+    "junior_faculty": (
+        "A junior faculty member or postdoctoral researcher in their early 30s. "
+        "They are physically fit, have been on campus for 1-3 years, and have a "
+        "moderate familiarity with shelter locations. They are calm under pressure "
+        "and generally follow official instructions."
+    ),
+    "adjunct_instructor": (
+        "An adjunct instructor who teaches on campus only part-time and is not "
+        "deeply integrated into campus life. They are physically able and calm, "
+        "but have limited knowledge of shelter locations and may hesitate while "
+        "figuring out where to go."
+    ),
+    # ── Staff (6) ─────────────────────────────────────────────────────────────
     "staff_admin": (
         "An administrative staff member in their 30s-40s who works on campus daily "
         "and has received evacuation training. They know the building layouts and "
         "shelter locations well, remain calm, and are likely to assist others and "
         "follow procedures closely."
+    ),
+    "facilities_staff": (
+        "A facilities or maintenance worker who moves around the entire campus daily "
+        "and knows the physical layout extremely well, including back routes and "
+        "utility areas. They are physically fit, calm, and highly compliant with "
+        "emergency procedures."
+    ),
+    "campus_security": (
+        "A campus security officer trained specifically in emergency response and "
+        "evacuation procedures. They know all shelter locations, remain completely "
+        "calm, and actively guide others. They move quickly and efficiently."
+    ),
+    "healthcare_staff": (
+        "A healthcare worker from the campus health center or affiliated hospital. "
+        "They are trained in emergency response, calm under pressure, and know "
+        "shelter locations well. They may slow down to assist injured or distressed "
+        "individuals along the way."
+    ),
+    "research_scientist": (
+        "A research scientist or lab technician who spends most time in a specific "
+        "building and has limited knowledge of other parts of campus. They are calm "
+        "and follow instructions, but may have a moderate delay while securing "
+        "lab materials before evacuating."
+    ),
+    "it_staff": (
+        "An IT staff member who works in various buildings across campus providing "
+        "technical support. They have a broad familiarity with campus layout, are "
+        "calm, follow instructions well, and move at a normal pace."
+    ),
+    # ── Visitors (4) ──────────────────────────────────────────────────────────
+    "visitor": (
+        "An external visitor or prospective student who has never been to this campus "
+        "before. They have no knowledge of shelter locations, are easily confused by "
+        "the campus layout, and are likely to panic or freeze under an emergency. "
+        "They will rely on signage and other people for guidance."
     ),
     "mobility_impaired": (
         "A person with significant mobility impairment who uses a wheelchair or "
@@ -54,11 +139,17 @@ PERSONAS = {
         "paths. They may feel high anxiety during an evacuation and depend heavily "
         "on assistance from others or accessible signage."
     ),
-    "visitor": (
-        "An external visitor or prospective student who has never been to this campus "
-        "before. They have no knowledge of shelter locations, are easily confused by "
-        "the campus layout, and are likely to panic or freeze under an emergency. "
-        "They will rely on signage and other people for guidance."
+    "conference_attendee": (
+        "An external professional attending a conference or seminar on campus. "
+        "They are physically able and calm, but have no knowledge of shelter "
+        "locations and only a rough sense of the campus layout. They will rely "
+        "on signage and follow other evacuees."
+    ),
+    "prospective_student_with_parent": (
+        "A prospective student and accompanying parent visiting campus for a tour. "
+        "The group moves slowly due to coordination, has no knowledge of shelter "
+        "locations, and experiences moderate-to-high panic. They are likely to "
+        "follow official instructions if they can find them."
     ),
 }
 
