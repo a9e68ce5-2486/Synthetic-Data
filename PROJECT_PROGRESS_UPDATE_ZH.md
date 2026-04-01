@@ -2,9 +2,9 @@
 
 > 文件建立日期：2026-03-21
 >  
-> 最近更新日期：2026-03-31
+> 最近更新日期：2026-04-01
 >
-> 本文件涵蓋的主要更新區間：2026-03-21 至 2026-03-31
+> 本文件涵蓋的主要更新區間：2026-03-21 至 2026-04-01
 
 這份文件整理目前專案在 DRQN shelter-routing 主線上的主要更新，包括：
 
@@ -1328,9 +1328,90 @@ get_distance_matrix()    # zone centroid 到各 shelter 距離
 
 | 步驟 | 工作 | 說明 |
 |------|------|------|
-| 1 | `llm_behavior_profiler.py` | 呼叫 Claude API，5 persona → 行為參數 JSON |
+| 1 | `llm_behavior_profiler.py` | 呼叫 Groq API，persona → 行為參數 JSON |
 | 2 | 修改 `batch_runner.py` | agent 初始化讀 profile |
 | 3 | 對比實驗 | uniform vs LLM-profiled |
 | 4 | `llm_zone_coordinator.py` | ReAct loop + 4 工具 |
 | 5 | 對比實驗 | LLM coordinator vs DRQN zone recommendation |
 | 6 | End-to-end 整合 | 三層 pipeline 一起跑完整實驗 |
+
+## 十五、LLM Persona 擴充：5 → 20 種（2026-04-01）
+
+### 1. 5-persona Sweep 結果（uniform vs LLM-profiled）
+
+使用 checkpoint：`logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt`
+比較對象：`logs/severity_sweep_v3_extreme`（uniform）vs `logs/severity_sweep_llm_profiled`（5-persona）
+
+| Severity | Uniform | LLM-profiled (5) | Δ reached |
+|----------|---------|-----------------|-----------|
+| light    | 0.8482  | 0.8346          | −0.0136   |
+| moderate | 0.7918  | 0.7736          | −0.0182   |
+| severe   | 0.7364  | 0.7336          | −0.0028   |
+| extreme  | 0.7164  | 0.7118          | −0.0046   |
+
+**結果判讀**：LLM-profiled 的 reached_rate 比 uniform 低約 1-2%，這是**預期中的正確結果**：
+
+- `mobility_impaired`（speed=0.4×）和 `visitor`（panic=0.7, obs_error=2.2×）拖低整體成功率
+- 這反映真實人群的異質性：並非所有人都能成功疏散
+- 弱勢族群的疏散困難被量化出來，這正是 Layer 1 的核心貢獻
+
+### 2. 人口組成擴充：5 → 20 種 persona
+
+為了更真實地模擬大學校園人口組成，將 persona 從 5 類擴充至 20 類，分成 4 個 role 類別：
+
+| Role | 人口比例 | Personas（7/3/6/4 種） |
+|------|---------|----------------------|
+| **student** | 60% | young_student, freshman_student, graduate_student, international_student, student_athlete, student_with_anxiety, part_time_student |
+| **faculty** | 15% | senior_faculty, junior_faculty, adjunct_instructor |
+| **staff** | 20% | staff_admin, facilities_staff, campus_security, healthcare_staff, research_scientist, it_staff |
+| **visitor** | 5% | visitor, mobility_impaired, conference_attendee, prospective_student_with_parent |
+
+人口比例依據 University of Utah 官方數據設計（學生 60% 為大宗，外來訪客 5%）。
+
+### 3. Llama 3.3 70B 生成的 20 個 Persona Profiles
+
+```
+Persona                              speed  comply  panic  obs_err  delay  famil
+---------------------------------------------------------------------------
+young_student                         1.20    0.60   0.40     1.50      2   0.40
+freshman_student                      1.20    0.40   0.80     2.50      3   0.20
+graduate_student                      1.20    0.90   0.10     0.80      0   0.80
+international_student                 1.10    0.40   0.60     2.20      2   0.20
+student_athlete                       1.40    0.60   0.10     0.80      0   0.80
+student_with_anxiety                  0.80    0.60   0.85     2.20      3   0.40
+part_time_student                     0.80    0.60   0.10     1.50      3   0.30
+senior_faculty                        0.60    0.95   0.10     0.80      0   0.90
+junior_faculty                        1.20    0.90   0.10     0.80      0   0.60
+adjunct_instructor                    1.00    0.60   0.10     1.20      2   0.40
+staff_admin                           1.10    0.95   0.05     0.80      0   0.95
+facilities_staff                      1.20    0.95   0.05     0.80      0   0.95
+campus_security                       1.20    1.00   0.00     0.50      0   1.00
+healthcare_staff                      0.80    0.95   0.10     0.80      0   0.95
+research_scientist                    1.00    0.90   0.10     1.00      2   0.40
+it_staff                              1.00    0.90   0.10     0.80      0   0.80
+visitor                               0.80    0.60   0.80     2.50      3   0.10
+mobility_impaired                     0.30    0.90   0.60     1.50      2   0.40
+conference_attendee                   1.00    0.60   0.10     1.50      2   0.20
+prospective_student_with_parent       0.60    0.80   0.70     2.20      3   0.10
+```
+
+**LLM 推論亮點**：
+- `campus_security`：唯一 panic=0.00、obs_error=0.50（最精準）、familiarity=1.00（完全熟悉）
+- `student_with_anxiety`：panic=0.85（最高），delay=3 steps，符合臨床描述
+- `freshman_student`：compliance=0.40（最低之一），obs_error=2.50，反映第一年不熟悉環境
+- `mobility_impaired`：speed=0.30（比 5-persona 版本的 0.40 更低），更貼近現實
+
+### 4. 修改的檔案
+
+| 檔案 | 修改內容 |
+|------|---------|
+| `llm_behavior_profiler.py` | PERSONAS 擴充至 20 種（4 個 role 類別） |
+| `agent_profiles.json` | 重新生成所有 20 個 persona 的定量行為參數 |
+| `config.py` | 新增 `EVAC_ROLE_WEIGHTS` 字典，取代原本 faculty/staff 二元分割 |
+| `batch_runner.py` | `_PERSONA_WEIGHTS` 更新為 4 個 role 的加權分配；`_build_agents()` 改用 role weights |
+
+### 5. 進行中的實驗
+
+- **20-persona severity sweep**：`logs/severity_sweep_20persona`（進行中）
+  - 對比對象：`logs/severity_sweep_llm_profiled`（5-persona）和 `logs/severity_sweep_v3_extreme`（uniform）
+  - 預期結果：更低的整體 reached_rate（因為加入更多高風險族群如 freshman_student, student_with_anxiety），但 fairness gap 分析更豐富

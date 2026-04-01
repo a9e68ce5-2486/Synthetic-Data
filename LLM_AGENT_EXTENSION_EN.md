@@ -354,44 +354,67 @@ Retains the existing DRQN system. Receives Layer 1 persona parameters as agent i
 | 3 | `agents/base_agent.py` — add persona fields | ✅ Done |
 | 4 | `agents/ped_agent.py` — multiply speed by `speed_multiplier` | ✅ Done |
 | 5 | `batch_runner.py` — auto-load profiles, assign persona by role | ✅ Done |
-| 6 | Run LLM-profiled severity sweep (vs uniform agents) | 🔄 In Progress |
-| 7 | `llm_zone_coordinator.py` (ReAct loop + 4 tools) | ⬜ Planned |
-| 8 | LLM coordinator vs DRQN zone recommendation comparison | ⬜ Planned |
-| 9 | End-to-end three-layer pipeline integration | ⬜ Planned |
+| 6 | 5-persona severity sweep vs uniform agents | ✅ Done |
+| 7 | Expand to 20 personas across 4 role categories (realistic campus population) | ✅ Done |
+| 8 | 20-persona severity sweep (vs 5-persona and uniform) | 🔄 In Progress |
+| 9 | `llm_zone_coordinator.py` (ReAct loop + 4 tools) | ⬜ Planned |
+| 10 | LLM coordinator vs DRQN zone recommendation comparison | ⬜ Planned |
+| 11 | End-to-end three-layer pipeline integration | ⬜ Planned |
 
-### LLM-Generated Persona Profiles (Llama 3.3 70B via Groq)
+### 5-Persona vs Uniform Comparison Results
 
-```json
-{
-  "senior_faculty":    { "walk_speed_multiplier": 0.60, "compliance_rate": 0.95, "panic_level": 0.10,
-                         "observation_error_multiplier": 0.80, "decision_delay_steps": 0, "shelter_familiarity": 0.90 },
-  "young_student":     { "walk_speed_multiplier": 1.20, "compliance_rate": 0.60, "panic_level": 0.40,
-                         "observation_error_multiplier": 1.50, "decision_delay_steps": 2, "shelter_familiarity": 0.40 },
-  "staff_admin":       { "walk_speed_multiplier": 1.10, "compliance_rate": 0.95, "panic_level": 0.05,
-                         "observation_error_multiplier": 0.80, "decision_delay_steps": 0, "shelter_familiarity": 0.95 },
-  "mobility_impaired": { "walk_speed_multiplier": 0.40, "compliance_rate": 0.90, "panic_level": 0.60,
-                         "observation_error_multiplier": 1.50, "decision_delay_steps": 2, "shelter_familiarity": 0.40 },
-  "visitor":           { "walk_speed_multiplier": 0.80, "compliance_rate": 0.60, "panic_level": 0.70,
-                         "observation_error_multiplier": 2.20, "decision_delay_steps": 3, "shelter_familiarity": 0.10 }
-}
+| Severity | Uniform | LLM-Profiled (5) | Δ reached |
+|----------|---------|-----------------|-----------|
+| light    | 0.8482  | 0.8346          | −0.0136   |
+| moderate | 0.7918  | 0.7736          | −0.0182   |
+| severe   | 0.7364  | 0.7336          | −0.0028   |
+| extreme  | 0.7164  | 0.7118          | −0.0046   |
+
+LLM-profiled agents show ~1-2% lower reached_rate than uniform — an **expected and meaningful result**. It quantifies the evacuation disadvantage of vulnerable populations (mobility_impaired, visitor) that the uniform model ignores.
+
+### Expanded to 20 Personas (Llama 3.3 70B via Groq)
+
+**4 role categories reflecting University of Utah population:**
+
+| Role | Weight | Personas |
+|------|--------|---------|
+| student | 60% | young_student, freshman_student, graduate_student, international_student, student_athlete, student_with_anxiety, part_time_student |
+| faculty | 15% | senior_faculty, junior_faculty, adjunct_instructor |
+| staff | 20% | staff_admin, facilities_staff, campus_security, healthcare_staff, research_scientist, it_staff |
+| visitor | 5% | visitor, mobility_impaired, conference_attendee, prospective_student_with_parent |
+
+**Generated parameter highlights:**
+
 ```
-
-LLM reasoning is consistent with expectations: visitor has the highest observation error (2.2×) and lowest shelter familiarity; mobility_impaired has the lowest speed (0.4×); staff_admin is the most calm (panic 0.05).
+Persona                              speed  comply  panic  obs_err  delay  famil
+campus_security                       1.20    1.00   0.00     0.50      0   1.00  ← best performer
+student_athlete                       1.40    0.60   0.10     0.80      0   0.80
+student_with_anxiety                  0.80    0.60   0.85     2.20      3   0.40  ← highest panic
+freshman_student                      1.20    0.40   0.80     2.50      3   0.20  ← lowest compliance
+mobility_impaired                     0.30    0.90   0.60     1.50      2   0.40  ← slowest
+visitor/prospective_*              0.6–0.8  0.60–0.80  0.70–0.80  2.20–2.50  3  0.10  ← unfamiliar
+```
 
 ### Persona Assignment Strategy (`batch_runner.py`)
 
 ```
-faculty → senior_faculty (55%), staff_admin (25%), mobility_impaired (20%)
-staff   → staff_admin (50%), senior_faculty (20%), young_student (10%),
-          mobility_impaired (10%), visitor (10%)
+student → young_student (30%), freshman_student (20%), graduate_student (20%),
+          international_student (10%), student_with_anxiety (8%), student_athlete (7%),
+          part_time_student (5%)
+faculty → senior_faculty (45%), junior_faculty (35%), adjunct_instructor (20%)
+staff   → staff_admin (30%), facilities_staff (20%), healthcare_staff (15%),
+          research_scientist (15%), campus_security (10%), it_staff (10%)
+visitor → visitor (35%), conference_attendee (30%), prospective_student_with_parent (20%),
+          mobility_impaired (15%)
 ```
 
 ### Modified Files
 
 | File | Changes |
 |------|---------|
-| `llm_behavior_profiler.py` | Created: Groq API + persona prompt → JSON profiles |
-| `agent_profiles.json` | Created: quantitative behavior parameters for 5 personas |
+| `llm_behavior_profiler.py` | PERSONAS expanded from 5 to 20 across 4 role categories |
+| `agent_profiles.json` | Regenerated: all 20 persona behavior parameters via Llama 3.3 70B |
 | `agents/base_agent.py` | Added persona, speed_multiplier, and 5 other fields (backward-compatible defaults) |
 | `agents/ped_agent.py` | `step()` now uses `EVAC_SPEED_WALK * self.speed_multiplier` |
-| `batch_runner.py` | Added `_assign_persona()`, `_apply_persona()`; `_build_agents()` integrates persona assignment |
+| `config.py` | Added `EVAC_ROLE_WEIGHTS` dict, replacing binary faculty/staff split |
+| `batch_runner.py` | `_PERSONA_WEIGHTS` updated for 4 roles; `_build_agents()` uses role-weighted sampling |

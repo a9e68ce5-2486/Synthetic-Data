@@ -2,7 +2,7 @@
 
 > 文件建立日期：2026-03-31
 >
-> 背景：課程老師指出目前 DRQN 系統缺少與 LLM agents 的連結（CS6960 課程主題），建議以「LLM agents for human behavior modeling」作為強化方向。
+> 
 
 ---
 
@@ -12,7 +12,6 @@
 
 1. **所有 agent 行為參數完全相同**：速度、觀察誤差、決策邏輯對所有人一致，不符合真實人群的異質性（老人、行動不便者、學生、教職員反應完全不同）
 2. **Zone assignment 是純演算法決策**：沒有語意推理能力，無法解釋「為什麼這個 zone 要去這個 shelter」
-3. **與課程主題（LLM agents）缺乏連結**：Q-learning agent 不使用語言，需要補強
 
 **解法**：三層架構
 
@@ -26,7 +25,7 @@ Layer 3 (DRQN): Navigation                 → 每個 agent 的逐步圖上路�
 
 ## 二、相關論文整理
 
-### 分類 A：LLM Agent 用於疏散模擬（最直接相關）
+### 分類 A：LLM Agent 用於疏散模擬
 
 #### 1. LLM Agents for Fire Evacuation Simulation
 
@@ -357,44 +356,68 @@ assign_zone_to_shelter() # 輸出分配決策
 | 3 | `agents/base_agent.py` 加入 persona 欄位 | ✅ 完成 |
 | 4 | `agents/ped_agent.py` 速度乘以 `speed_multiplier` | ✅ 完成 |
 | 5 | `batch_runner.py` 自動讀 profiles、依 role 分配 persona | ✅ 完成 |
-| 6 | 跑 LLM-profiled severity sweep（對比 uniform agents） | 🔄 進行中 |
-| 7 | `llm_zone_coordinator.py`（ReAct loop + 4 工具） | ⬜ 待做 |
-| 8 | LLM coordinator vs DRQN zone recommendation 對比 | ⬜ 待做 |
-| 9 | 整合三層 end-to-end pipeline | ⬜ 待做 |
+| 6 | 5-persona severity sweep 對比 uniform agents | ✅ 完成 |
+| 7 | 擴充至 20 persona（4 role 類別，覆蓋大學真實人口組成） | ✅ 完成 |
+| 8 | 20-persona severity sweep（對比 5-persona 與 uniform） | 🔄 進行中 |
+| 9 | `llm_zone_coordinator.py`（ReAct loop + 4 工具） | ⬜ 待做 |
+| 10 | LLM coordinator vs DRQN zone recommendation 對比 | ⬜ 待做 |
+| 11 | 整合三層 end-to-end pipeline | ⬜ 待做 |
 
-### LLM 生成的 Persona Profiles（Llama 3.3 70B via Groq）
+### 5-persona vs Uniform 比較結果
 
-```json
-{
-  "senior_faculty":    { "walk_speed_multiplier": 0.60, "compliance_rate": 0.95, "panic_level": 0.10,
-                         "observation_error_multiplier": 0.80, "decision_delay_steps": 0, "shelter_familiarity": 0.90 },
-  "young_student":     { "walk_speed_multiplier": 1.20, "compliance_rate": 0.60, "panic_level": 0.40,
-                         "observation_error_multiplier": 1.50, "decision_delay_steps": 2, "shelter_familiarity": 0.40 },
-  "staff_admin":       { "walk_speed_multiplier": 1.10, "compliance_rate": 0.95, "panic_level": 0.05,
-                         "observation_error_multiplier": 0.80, "decision_delay_steps": 0, "shelter_familiarity": 0.95 },
-  "mobility_impaired": { "walk_speed_multiplier": 0.40, "compliance_rate": 0.90, "panic_level": 0.60,
-                         "observation_error_multiplier": 1.50, "decision_delay_steps": 2, "shelter_familiarity": 0.40 },
-  "visitor":           { "walk_speed_multiplier": 0.80, "compliance_rate": 0.60, "panic_level": 0.70,
-                         "observation_error_multiplier": 2.20, "decision_delay_steps": 3, "shelter_familiarity": 0.10 }
-}
+| Severity | Uniform | LLM-profiled (5) | Δ reached |
+|----------|---------|-----------------|-----------|
+| light    | 0.8482  | 0.8346          | −0.0136   |
+| moderate | 0.7918  | 0.7736          | −0.0182   |
+| severe   | 0.7364  | 0.7336          | −0.0028   |
+| extreme  | 0.7164  | 0.7118          | −0.0046   |
+
+LLM-profiled 比 uniform 低約 1-2%，這是預期中的正確結果——反映真實人群的異質性。
+
+### 20-persona 擴充（Llama 3.3 70B via Groq）
+
+**4 個 Role 類別與人口比例：**
+
+| Role | 比例 | Personas |
+|------|------|---------|
+| student | 60% | young_student, freshman_student, graduate_student, international_student, student_athlete, student_with_anxiety, part_time_student |
+| faculty | 15% | senior_faculty, junior_faculty, adjunct_instructor |
+| staff | 20% | staff_admin, facilities_staff, campus_security, healthcare_staff, research_scientist, it_staff |
+| visitor | 5% | visitor, mobility_impaired, conference_attendee, prospective_student_with_parent |
+
+**生成參數摘要：**
+
 ```
-
-LLM 推論邏輯符合預期：visitor 觀察誤差最高（2.2×）且最不熟悉 shelter；mobility_impaired 速度最慢（0.4×）；staff_admin 最鎮定（panic 0.05）。
+Persona                              speed  comply  panic  obs_err  delay  famil
+campus_security                       1.20    1.00   0.00     0.50      0   1.00  ← 最佳
+student_athlete                       1.40    0.60   0.10     0.80      0   0.80
+graduate_student                      1.20    0.90   0.10     0.80      0   0.80
+student_with_anxiety                  0.80    0.60   0.85     2.20      3   0.40  ← 最高 panic
+freshman_student                      1.20    0.40   0.80     2.50      3   0.20  ← 最低 compliance
+mobility_impaired                     0.30    0.90   0.60     1.50      2   0.40  ← 最慢速度
+visitor/prospective_*                 0.6-0.8  0.60-0.80  0.70-0.80  2.20-2.50  3  0.10  ← 不熟悉 shelter
+```
 
 ### Persona 分配策略（`batch_runner.py`）
 
 ```
-faculty → senior_faculty (55%), staff_admin (25%), mobility_impaired (20%)
-staff   → staff_admin (50%), senior_faculty (20%), young_student (10%),
-          mobility_impaired (10%), visitor (10%)
+student → young_student (30%), freshman_student (20%), graduate_student (20%),
+          international_student (10%), student_with_anxiety (8%), student_athlete (7%),
+          part_time_student (5%)
+faculty → senior_faculty (45%), junior_faculty (35%), adjunct_instructor (20%)
+staff   → staff_admin (30%), facilities_staff (20%), healthcare_staff (15%),
+          research_scientist (15%), campus_security (10%), it_staff (10%)
+visitor → visitor (35%), conference_attendee (30%), prospective_student_with_parent (20%),
+          mobility_impaired (15%)
 ```
 
 ### 修改的檔案
 
 | 檔案 | 修改內容 |
 |------|---------|
-| `llm_behavior_profiler.py` | 新建：Groq API + persona prompt → JSON profiles |
-| `agent_profiles.json` | 新建：5 persona 的定量行為參數 |
+| `llm_behavior_profiler.py` | PERSONAS 從 5 擴充至 20 種（4 個 role 類別） |
+| `agent_profiles.json` | 重新生成：20 persona 的定量行為參數 |
 | `agents/base_agent.py` | 加入 persona、speed_multiplier 等 7 個欄位（預設值保持向後相容） |
 | `agents/ped_agent.py` | step() 改為 `EVAC_SPEED_WALK * self.speed_multiplier` |
-| `batch_runner.py` | 新增 `_assign_persona()`、`_apply_persona()`，`_build_agents()` 整合 persona 分配 |
+| `config.py` | 新增 `EVAC_ROLE_WEIGHTS` 字典，取代原本 faculty/staff 二元分割 |
+| `batch_runner.py` | `_PERSONA_WEIGHTS` 更新為 4 個 role；`_build_agents()` 使用 role weights 隨機抽樣 |
