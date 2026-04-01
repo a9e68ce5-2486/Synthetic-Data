@@ -1,6 +1,6 @@
 # Campus Evacuation Planning with LLM Agents and DRQN
 
-**CS6960 Project — University of Utah**
+
 
 A campus evacuation simulation system that combines LLM-based human behavior modeling, LLM-driven zone coordination, and Deep Recurrent Q-Network (DRQN) navigation on a real OSM graph of the University of Utah campus.
 
