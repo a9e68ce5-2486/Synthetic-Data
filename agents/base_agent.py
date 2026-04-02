@@ -34,7 +34,7 @@ class BaseAgent:
         return self.env.G_walk if self.mode == "walk" else self.env.G_drive
 
     def update_belief(self):
-        obs = self.env.observe(self.node, self.mode)
+        obs = self.env.observe(self.node, self.mode, self.observation_error_multiplier)
         self.belief.update(obs)
 
     def _cost(self, u, v, data):

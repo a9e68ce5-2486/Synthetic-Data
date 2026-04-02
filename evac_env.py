@@ -227,7 +227,7 @@ class EvacEnv:
                 best = n
         return best, math.sqrt(best_d), False
 
-    def observe(self, node, mode="walk"):
+    def observe(self, node, mode="walk", obs_error_multiplier=1.0):
         # partial observation within radius
         if node not in self.pos:
             return {}
@@ -236,7 +236,7 @@ class EvacEnv:
         G = self.G_walk if mode == "walk" else self.G_drive
         blocked_set = self.blocked_edges_walk if mode == "walk" else self.blocked_edges_drive
         snow = self.snow_depth_walk if mode == "walk" else self.snow_depth_drive
-        obs_error = config.EVAC_OBS_ERROR_WALK if mode == "walk" else config.EVAC_OBS_ERROR_DRIVE
+        obs_error = (config.EVAC_OBS_ERROR_WALK if mode == "walk" else config.EVAC_OBS_ERROR_DRIVE) * obs_error_multiplier
         for u, v in G.edges():
             x1, y1 = self.pos[u]
             if math.hypot(x1 - x0, y1 - y0) <= config.EVAC_OBS_RADIUS_M:

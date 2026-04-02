@@ -54,6 +54,33 @@ def _assign_persona(role: str) -> str:
     weights  = [w for _, w in weights_list]
     return random.choices(personas, weights=weights, k=1)[0]
 
+
+def _agent_familiar_goals(agent, all_goals):
+    """Return the subset of goal nodes this agent knows about, based on shelter_familiarity.
+
+    familiarity=1.0 → knows all shelters (optimal)
+    familiarity=0.1 → knows only 1 shelter (random, may not be nearest)
+    The subset is fixed per agent (seeded by agent id + persona) for reproducibility.
+    """
+    familiarity = getattr(agent, "shelter_familiarity", 1.0)
+    if familiarity >= 1.0 or len(all_goals) <= 1:
+        return list(all_goals)
+    n_known = max(1, round(familiarity * len(all_goals)))
+    rng = random.Random(agent.id ^ hash(getattr(agent, "persona", "") or ""))
+    shuffled = list(all_goals)
+    rng.shuffle(shuffled)
+    return shuffled[:n_known]
+
+
+def _apply_compliance(agent, policy_goal, familiar_goals):
+    """With probability (1 - compliance_rate), override policy goal with a random familiar shelter."""
+    compliance = getattr(agent, "compliance_rate", 1.0)
+    if compliance >= 1.0 or not familiar_goals:
+        return policy_goal
+    if random.random() > compliance:
+        return random.choice(familiar_goals)
+    return policy_goal
+
 def _apply_persona(agent, persona_name: str):
     """Apply LLM-generated behavior profile to an agent."""
     if not persona_name or persona_name not in _AGENT_PROFILES:
@@ -534,12 +561,14 @@ def _build_agents(env):
         ped = PedAgent(i + 1, start, env)
         ped.role = random.choices(_roles, weights=_role_w, k=1)[0]
         _apply_persona(ped, _assign_persona(ped.role))
+        ped._delay_remaining = ped.decision_delay_steps
         peds.append(ped)
     for i in range(config.EVAC_CAR_COUNT):
         start = random.choice(nodes_drive)
         car = CarAgent(i + 1, start, env)
         car.role = random.choices(_roles, weights=_role_w, k=1)[0]
         _apply_persona(car, _assign_persona(car.role))
+        car._delay_remaining = car.decision_delay_steps
         cars.append(car)
     route, stops = build_shuttle_route(env)
     for i in range(config.EVAC_BUS_COUNT):
@@ -564,20 +593,25 @@ def _capacity_aware_goal_map(agents, graph, goal_nodes, policy_name, env, goal_t
     goal_to_shelter = goal_to_shelter or {}
 
     for a in agents:
+        # shelter familiarity: agent only knows a subset of shelters
+        familiar_goals = _agent_familiar_goals(a, list(goal_nodes))
+
         if getattr(config, "EVAC_SHELTER_CAPACITY_ENABLED", False):
             available_goals = []
-            for g in goal_nodes:
+            for g in familiar_goals:
                 shelter_node = goal_to_shelter.get(g, g)
                 cap = env.shelter_capacity.get(shelter_node, 0)
                 occ = env.shelter_occupancy.get(shelter_node, 0)
                 assigned = state.get(shelter_node, 0)
                 if occ + assigned < cap:
                     available_goals.append(g)
-            candidate_goals = available_goals or list(goal_nodes)
+            candidate_goals = available_goals or familiar_goals
         else:
-            candidate_goals = list(goal_nodes)
+            candidate_goals = familiar_goals
 
         g = select_goal(a, graph, candidate_goals, policy_name, state)
+        # compliance: non-compliant agents may ignore policy and pick randomly
+        g = _apply_compliance(a, g, familiar_goals)
         goals[a.id] = g
         shelter_node = goal_to_shelter.get(g, g)
         state[shelter_node] = state.get(shelter_node, 0) + 1
@@ -740,6 +774,11 @@ def run_single_simulation(
             for a in peds:
                 prev = a.node
                 prev_edge = (a.edge_u, a.edge_v, float(a.edge_progress))
+                # decision delay: agent waits N steps before starting to move
+                if getattr(a, "_delay_remaining", 0) > 0:
+                    a._delay_remaining -= 1
+                    ped_stay += 1
+                    continue
                 if drqn_ctrl is not None and not a.reached and a.alive:
                     goal = ped_goals[a.id]
                     if a.node == goal:
@@ -830,6 +869,9 @@ def run_single_simulation(
                     edge_counts[(prev, a.node)] += 1
             for a in cars:
                 prev = a.node
+                if getattr(a, "_delay_remaining", 0) > 0:
+                    a._delay_remaining -= 1
+                    continue
                 a.step(car_goals[a.id])
                 if a.reached and not getattr(a, "shelter_admitted", False):
                     target_shelter = getattr(a, "target_shelter", drive_goal_to_shelter.get(car_goals.get(a.id), car_goals.get(a.id)))
