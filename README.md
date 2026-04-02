@@ -129,16 +129,16 @@ Root cause identified: agents spawned on isolated nodes (`candidates=[]`) with a
 
 DRQN scales to 700 total agents without degradation.
 
-### LLM-Profiled Agents vs Uniform (5-Persona, blizzard severity sweep)
+### All-Policies Blizzard Severity Sweep
 
-| Severity | Uniform | LLM-Profiled (5) | Δ |
-|----------|---------|-----------------|---|
-| light    | 0.848   | 0.835           | −0.014 |
-| moderate | 0.792   | 0.774           | −0.018 |
-| severe   | 0.736   | 0.734           | −0.003 |
-| extreme  | 0.716   | 0.712           | −0.005 |
+| Severity | round_robin | nearest | DRQN (uniform) | DRQN (20-persona v2) |
+|----------|------------|---------|----------------|----------------------|
+| light    | 0.058 | 0.173 | 0.848 | **0.796** |
+| moderate | 0.022 | 0.100 | 0.792 | **0.708** |
+| severe   | 0.012 | 0.061 | 0.736 | **0.623** |
+| extreme  | 0.010 | 0.031 | 0.716 | **0.597** |
 
-LLM-profiled agents show ~1-2% lower reached_rate, reflecting real population heterogeneity (mobility-impaired, high-panic visitors). 20-persona sweep in progress.
+DRQN achieves **71×** reached_rate vs round_robin under extreme blizzard. 20-persona LLM-profiled agents show 5-12% lower reached_rate than uniform, reflecting genuine population heterogeneity — enabled by wiring all 4 persona behavior fields (familiarity, compliance, obs_error, delay) into simulation.
 
 ---
 
@@ -210,14 +210,14 @@ LLM-profiled agents show ~1-2% lower reached_rate, reflecting real population he
 - [x] **Shelter capacity**: capacity-aware assignment, taboo memory, reassignment tracking
 - [x] **Zone-level planning**: demand balancing, route-feasibility filter, backup quality threshold
 - [x] **Layer 1 — LLM Behavior Profiling**: Llama 3.3 70B generates 20 persona profiles across 4 role categories (student/faculty/staff/visitor); heterogeneous agents in simulation
-- [x] **Layer 1 evaluation (5-persona)**: LLM-profiled agents show ~1-2% lower reached_rate vs uniform, validating population heterogeneity effect
-
-### In Progress
-
-- [ ] **Layer 1 evaluation (20-persona)**: 20-persona severity sweep vs 5-persona and uniform (running)
+- [x] **Layer 1 evaluation (5-persona)**: Initial sweep showed 1-2% gap (persona fields not yet wired in)
+- [x] **Layer 1 persona mechanics**: Wired obs_error_multiplier, shelter_familiarity, compliance_rate, decision_delay_steps into simulation
+- [x] **Layer 1 evaluation (20-persona v2)**: Full persona mechanics active — 5-12% lower reached_rate vs uniform, genuine heterogeneity confirmed
+- [x] **Baseline comparison on blizzard**: round_robin/nearest collapse under disaster (extreme: 1%/3% vs DRQN 71%)
 
 ### Planned
 
+- [ ] **Personal Advisor**: natural language user description → LLM behavior profile → DRQN route → natural language recommendation
 - [ ] **Layer 2 — LLM Zone Coordinator**: tool-using LLM (ReAct) for zone-level shelter assignment
 - [ ] **Layer 2 evaluation**: LLM coordinator vs DRQN-based zone recommendation
 - [ ] **End-to-end integration**: three-layer pipeline experiment

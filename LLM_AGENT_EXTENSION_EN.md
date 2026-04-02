@@ -356,21 +356,34 @@ Retains the existing DRQN system. Receives Layer 1 persona parameters as agent i
 | 5 | `batch_runner.py` — auto-load profiles, assign persona by role | ✅ Done |
 | 6 | 5-persona severity sweep vs uniform agents | ✅ Done |
 | 7 | Expand to 20 personas across 4 role categories (realistic campus population) | ✅ Done |
-| 8 | 20-persona severity sweep (vs 5-persona and uniform) | 🔄 In Progress |
-| 9 | `llm_zone_coordinator.py` (ReAct loop + 4 tools) | ⬜ Planned |
-| 10 | LLM coordinator vs DRQN zone recommendation comparison | ⬜ Planned |
-| 11 | End-to-end three-layer pipeline integration | ⬜ Planned |
+| 8 | Fix: wire obs_error / familiarity / compliance / delay into simulation | ✅ Done |
+| 9 | 20-persona v2 severity sweep + all-policies full comparison | ✅ Done |
+| 10 | Personal Advisor: natural language input → personalized evacuation recommendation | ⬜ Planned |
+| 11 | `llm_zone_coordinator.py` (ReAct loop + 4 tools) | ⬜ Planned |
+| 12 | LLM coordinator vs DRQN zone recommendation comparison | ⬜ Planned |
+| 13 | End-to-end three-layer pipeline integration | ⬜ Planned |
 
-### 5-Persona vs Uniform Comparison Results
+### Full Comparison Results (2026-04-02)
 
-| Severity | Uniform | LLM-Profiled (5) | Δ reached |
-|----------|---------|-----------------|-----------|
-| light    | 0.8482  | 0.8346          | −0.0136   |
-| moderate | 0.7918  | 0.7736          | −0.0182   |
-| severe   | 0.7364  | 0.7336          | −0.0028   |
-| extreme  | 0.7164  | 0.7118          | −0.0046   |
+**Key finding: v1 (fields not wired) showed only 1-2% gap — statistical noise, not real heterogeneity. After wiring all 4 fields in v2, the gap grows to 5-12%, representing genuine persona effects.**
 
-LLM-profiled agents show ~1-2% lower reached_rate than uniform — an **expected and meaningful result**. It quantifies the evacuation disadvantage of vulnerable populations (mobility_impaired, visitor) that the uniform model ignores.
+| Severity | Uniform | 5-persona v1 | 20-persona v2 | v2 vs Uniform |
+|----------|---------|-------------|--------------|--------------|
+| light    | 0.848   | 0.835       | **0.796**    | −0.052 |
+| moderate | 0.792   | 0.774       | **0.708**    | −0.084 |
+| severe   | 0.736   | 0.734       | **0.623**    | −0.113 |
+| extreme  | 0.716   | 0.712       | **0.597**    | −0.119 |
+
+**Baseline policies on blizzard severity sweep:**
+
+| Severity | round_robin | nearest | DRQN (uniform) |
+|----------|------------|---------|----------------|
+| light    | 0.058 | 0.173 | 0.835 |
+| moderate | 0.022 | 0.100 | 0.774 |
+| severe   | 0.012 | 0.061 | 0.734 |
+| extreme  | 0.010 | 0.031 | 0.712 |
+
+Baselines collapse under blizzard because they use distance-based movement (max 840m in 600 steps) while campus walk distances reach p90=1765m. DRQN's edge-hop model is not subject to this constraint.
 
 ### Expanded to 20 Personas (Llama 3.3 70B via Groq)
 

@@ -358,21 +358,32 @@ assign_zone_to_shelter() # 輸出分配決策
 | 5 | `batch_runner.py` 自動讀 profiles、依 role 分配 persona | ✅ 完成 |
 | 6 | 5-persona severity sweep 對比 uniform agents | ✅ 完成 |
 | 7 | 擴充至 20 persona（4 role 類別，覆蓋大學真實人口組成） | ✅ 完成 |
-| 8 | 20-persona severity sweep（對比 5-persona 與 uniform） | 🔄 進行中 |
-| 9 | `llm_zone_coordinator.py`（ReAct loop + 4 工具） | ⬜ 待做 |
-| 10 | LLM coordinator vs DRQN zone recommendation 對比 | ⬜ 待做 |
-| 11 | 整合三層 end-to-end pipeline | ⬜ 待做 |
+| 8 | 修正：接入 obs_error / familiarity / compliance / delay 四個欄位 | ✅ 完成 |
+| 9 | 20-persona v2 severity sweep + all-policies 完整比較 | ✅ 完成 |
+| 10 | Personal Advisor：自然語言輸入 → 個人化疏散建議 | ⬜ 待做 |
+| 11 | `llm_zone_coordinator.py`（ReAct loop + 4 工具） | ⬜ 待做 |
+| 12 | LLM coordinator vs DRQN zone recommendation 對比 | ⬜ 待做 |
+| 13 | 整合三層 end-to-end pipeline | ⬜ 待做 |
 
-### 5-persona vs Uniform 比較結果
+### 完整比較結果（2026-04-02）
 
-| Severity | Uniform | LLM-profiled (5) | Δ reached |
-|----------|---------|-----------------|-----------|
-| light    | 0.8482  | 0.8346          | −0.0136   |
-| moderate | 0.7918  | 0.7736          | −0.0182   |
-| severe   | 0.7364  | 0.7336          | −0.0028   |
-| extreme  | 0.7164  | 0.7118          | −0.0046   |
+**關鍵發現：v1（欄位未接入）的差距只有 1-2%，是統計噪音而非真實異質性效果。v2 接入四個欄位後差距擴大至 5-12%，才是真正有意義的比較。**
 
-LLM-profiled 比 uniform 低約 1-2%，這是預期中的正確結果——反映真實人群的異質性。
+| Severity | Uniform | 5-persona v1 | 20-persona v2 | v2 vs Uniform |
+|----------|---------|-------------|--------------|--------------|
+| light    | 0.848   | 0.835       | **0.796**    | −0.052 |
+| moderate | 0.792   | 0.774       | **0.708**    | −0.084 |
+| severe   | 0.736   | 0.734       | **0.623**    | −0.113 |
+| extreme  | 0.716   | 0.712       | **0.597**    | −0.119 |
+
+**Baseline（round_robin / nearest）on blizzard：**
+
+| Severity | round_robin | nearest | DRQN (uniform) |
+|----------|------------|---------|----------------|
+| light    | 0.058 | 0.173 | 0.835 |
+| moderate | 0.022 | 0.100 | 0.774 |
+| severe   | 0.012 | 0.061 | 0.734 |
+| extreme  | 0.010 | 0.031 | 0.712 |
 
 ### 20-persona 擴充（Llama 3.3 70B via Groq）
 

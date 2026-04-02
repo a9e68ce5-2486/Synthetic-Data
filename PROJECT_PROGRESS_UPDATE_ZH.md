@@ -1410,8 +1410,67 @@ prospective_student_with_parent       0.60    0.80   0.70     2.20      3   0.10
 | `config.py` | 新增 `EVAC_ROLE_WEIGHTS` 字典，取代原本 faculty/staff 二元分割 |
 | `batch_runner.py` | `_PERSONA_WEIGHTS` 更新為 4 個 role 的加權分配；`_build_agents()` 改用 role weights |
 
-### 5. 進行中的實驗
+### 5. Persona 欄位接入修正（2026-04-02）
 
-- **20-persona severity sweep**：`logs/severity_sweep_20persona`（進行中）
-  - 對比對象：`logs/severity_sweep_llm_profiled`（5-persona）和 `logs/severity_sweep_v3_extreme`（uniform）
-  - 預期結果：更低的整體 reached_rate（因為加入更多高風險族群如 freshman_student, student_with_anxiety），但 fairness gap 分析更豐富
+發現六個 persona 欄位中只有 `speed_multiplier` 在 baseline 模式下有效，其餘五個欄位雖寫入 agent 但從未被讀取：
+
+| 欄位 | 修正前 | 修正後 |
+|------|--------|--------|
+| `observation_error_multiplier` | ❌ 無效 | ✅ 傳入 `evac_env.observe()`，影響封路偵測準確度 |
+| `shelter_familiarity` | ❌ 無效 | ✅ `_agent_familiar_goals()` 限制 agent 只能看到部分 shelter |
+| `compliance_rate` | ❌ 無效 | ✅ `_apply_compliance()` 以 `1-rate` 機率隨機覆蓋 shelter 指派 |
+| `decision_delay_steps` | ❌ 無效 | ✅ `_delay_remaining` 計數器讓 agent 等待 N steps 才開始移動 |
+
+**修改檔案**：`evac_env.py`、`agents/base_agent.py`、`batch_runner.py`
+
+### 6. 完整三方比較結果（2026-04-02）
+
+#### All-policies blizzard severity sweep（round_robin / nearest / DRQN uniform）
+
+| Severity | round_robin | nearest | DRQN (uniform) |
+|----------|------------|---------|----------------|
+| light    | 0.058 | 0.173 | 0.835 |
+| moderate | 0.022 | 0.100 | 0.774 |
+| severe   | 0.012 | 0.061 | 0.734 |
+| extreme  | 0.010 | 0.031 | 0.712 |
+
+Baseline 在 blizzard 下表現極差（extreme 下 round_robin=1%、nearest=3%），根本原因：baseline 使用 distance-based 移動（600 steps × 1.4m/step = 840m 上限），而校園 walk 距離 p90=1765m，大量 agent 物理上無法在步數限制內抵達 shelter。DRQN 使用 edge-hop 模式不受此限制。
+
+#### 20-persona v2 sweep（四個欄位全部接入後）
+
+| Severity | Uniform | 5-persona (v1, 欄位無效) | 20-persona v2 (欄位接入) | Δ (uniform→v2) |
+|----------|---------|------------------------|------------------------|----------------|
+| light    | 0.848   | 0.835                  | **0.796**              | −0.052 |
+| moderate | 0.792   | 0.774                  | **0.708**              | −0.084 |
+| severe   | 0.736   | 0.734                  | **0.623**              | −0.113 |
+| extreme  | 0.716   | 0.712                  | **0.597**              | −0.119 |
+
+v2 比 v1 多下降了 5-10%，確認四個 persona 欄位接入後確實產生真實的異質性效果。
+
+**Faculty vs Staff fairness gap（20-persona v2）：**
+
+| Severity | faculty reached | staff reached | gap (fac−staff) |
+|----------|----------------|--------------|----------------|
+| light    | 0.843 | 0.872 | −0.029 |
+| moderate | 0.727 | 0.822 | −0.095 |
+| severe   | 0.702 | 0.719 | −0.017 |
+| extreme  | 0.700 | 0.686 | +0.014 |
+
+輕微災害下 staff 優於 faculty（因為 staff 多為 staff_admin/facilities_staff，compliance 高、familiarity 高）；extreme 下 faculty 略優（student 族群佔 60%，high-panic student 在極端災害下成為主要拖累）。
+
+### 7. 後續計畫（Personal Advisor 構想）
+
+**使用者輸入自然語言描述 → 個人化疏散建議**
+
+```
+使用者：「I'm a first-year undergrad, never been here before, near the library」
+  ↓
+[LLM Parser] → behavior profile（familiarity=0.2, panic=0.8, delay=3...）
+  ↓
+[DRQN Route Rollout] → 從最近 OSM node 跑 shelter routing
+  ↓
+[LLM Report] → 「Head to Marriott Library Shelter. Take Presidents Circle —
+                avoid east roads (currently blocked). ~4 min walk.」
+```
+
+企業應用：新員工入職個人化疏散卡、ADA 合規路線、大型活動訪客即時指引。
