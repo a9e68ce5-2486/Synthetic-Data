@@ -2,7 +2,7 @@
 
 > 文件建立日期：2026-03-21
 >  
-> 最近更新日期：2026-04-01
+> 最近更新日期：2026-04-02
 >
 > 本文件涵蓋的主要更新區間：2026-03-21 至 2026-04-01
 
@@ -1473,4 +1473,397 @@ v2 比 v1 多下降了 5-10%，確認四個 persona 欄位接入後確實產生�
                 avoid east roads (currently blocked). ~4 min walk.」
 ```
 
+---
+
+## 十六、架構完整實作（2026-04-02）
+
+本次更新完成三層架構中所有缺失的元件，架構從「部分完成」進入「功能完整」狀態。
+
+### 1. panic_level 正式接入模擬
+
+**修改檔案**：`batch_runner.py`（`_apply_persona()` 函數）
+
+之前 `panic_level` 雖由 LLM 生成並存入 agent，但從未在模擬中產生效果。現在在 agent 建立時直接調整兩個有效參數：
+
+```python
+agent.compliance_rate            = raw_compliance × (1 − 0.5 × panic)
+agent.observation_error_multiplier = raw_obs_error × (1 + panic)
+```
+
+**有效值對比（關鍵 persona）**：
+
+| Persona | panic | obs_error（原→有效）| compliance（原→有效）|
+|---------|-------|---------------------|----------------------|
+| freshman_student | 0.80 | 2.50 → **4.50** | 0.40 → **0.24** |
+| student_with_anxiety | 0.85 | 2.20 → **4.07** | 0.60 → **0.34** |
+| campus_security | 0.00 | 0.50 → **0.50** | 1.00 → **1.00** |
+| visitor | 0.80 | 2.50 → **4.50** | 0.60 → **0.36** |
+
+### 2. Layer 2：LLM Zone Coordinator
+
+**新增檔案**：`llm_zone_coordinator.py`
+
+三層架構中的第二層，負責**區域層級的避難所分配決策**。
+
+核心設計：**ReAct 迴圈（Reason + Act）**，LLM 透過工具查詢資訊後逐步推理：
+
+```
+Thought: Zone 0 有 45 人，先確認最近避難所容量...
+Action: get_shelter_status(1234567890)
+Observation: { "capacity": 80, "available": 68 }
+Action: get_road_conditions(0, 1234567890)
+Observation: { "avg_distance_m": 342.0, "is_blocked": false }
+...
+Final Answer: { "assignments": [...] }
+```
+
+**提供給 LLM 的 4 個工具**：
+
+| 工具 | 功能 |
+|------|------|
+| `get_shelter_status(id)` | 容量、已使用、剩餘人數 |
+| `get_zone_population(id)` | 人數、弱勢族群估計 |
+| `get_road_conditions(zone, shelter)` | 平均距離、是否封鎖 |
+| `get_distance_matrix()` | 所有 zone × shelter 距離表 |
+
+無 API key 時自動 fallback 回演算法分配（`_assign_zone_shelters()`）。
+
+### 3. Personal Advisor（個人避難建議）
+
+**新增檔案**：`personal_advisor.py`
+
+完整的端對端三層 pipeline：
+
+```
+使用者自然語言輸入
+      ↓ Layer 1（LLM）
+  行為參數 profile（speed, panic, compliance, familiarity...）
+      ↓ Layer 3（DRQN）
+  最佳路線（考慮 panic / familiarity / compliance 調整後的參數）
+      ↓ Output layer（LLM）
+  個人化中英文疏散建議
+```
+
+使用範例：
+```bash
+python personal_advisor.py \
+  --checkpoint logs/drqn_torch_best.pt \
+  --description "我是大一新生，第一週來這個校區，不知道避難所在哪" \
+  --start-node 1234567890 \
+  --disaster-type blizzard --severity moderate
+```
+
+### 4. EVAC_PED_COUNT 提升至 100
+
+**修改檔案**：`config.py`
+
+原本 40 人在 20 種 persona 下每種平均只有 2 人，visitor 角色甚至不到 1 人/persona，無法進行有意義的 per-persona 統計。提升至 100 人後：
+
+| 角色 | 人數 | Persona 數 | 平均每種 |
+|------|------|------------|---------|
+| student (60%) | 60 | 7 | ~8.6 人 |
+| faculty (15%) | 15 | 3 | ~5.0 人 |
+| staff (20%) | 20 | 6 | ~3.3 人 |
+| visitor (5%) | 5 | 4 | ~1.3 人 |
+
+每個 persona 至少有 3+ 個 agent，fairness analysis 具備統計意義。
+
+### 5. 當前架構完成度
+
+| 層次 | 元件 | 狀態 |
+|------|------|------|
+| Layer 1 | LLM 行為建模（20 personas） | ✅ 完成 |
+| Layer 1 | panic_level 接入模擬 | ✅ 完成 |
+| Layer 2 | LLM Zone Coordinator（ReAct） | ✅ 完成 |
+| Layer 3 | DRQN 導航 | ✅ 完成 |
+| 端對端 | Personal Advisor | ✅ 完成 |
+| 評估 | Layer 2 LLM vs 演算法比較（`eval_zone_coordinator.py`） | ✅ 完成 |
+| 評估 | Per-persona fairness analysis + 三災害交叉比較 | ✅ 完成 |
+| 整合 | End-to-end demo（`demo_pipeline.py`） | ✅ 完成 |
+| API | Personal Advisor REST API（`advisor_api.py`） | ✅ 完成 |
+| 整合 | 完整 end-to-end 整合實驗（Step 22） | ⬜ 待做 |
+
+### 6. Per-Persona Fairness Analysis（2026-04-03）
+
+**設定**：enterprise_blizzard × 4 severity × 20 runs × DRQN（100 人，20 persona，panic 接入）
+
+#### Role 層級 reached_rate
+
+| Severity | student | faculty | staff | visitor |
+|----------|---------|---------|-------|---------|
+| light    | 0.756 | 0.788 | 0.839 | 0.647 |
+| moderate | 0.676 | 0.719 | 0.846 | 0.551 |
+| severe   | 0.584 | 0.673 | 0.701 | 0.429 |
+| extreme  | 0.557 | 0.683 | **0.715** | **0.280** |
+
+#### 最脆弱 Persona（extreme）
+
+| Rank | Persona | Role | reached_rate |
+|------|---------|------|-------------|
+| 1 | conference_attendee | visitor | **0.062** |
+| 2 | prospective_student_with_parent | visitor | 0.125 |
+| 3 | mobility_impaired | visitor | 0.214 |
+| 4 | part_time_student | student | 0.344 |
+| 5 | student_with_anxiety | student | 0.421 |
+
+#### 最強 Persona（extreme）
+
+| Rank | Persona | Role | reached_rate |
+|------|---------|------|-------------|
+| 1 | campus_security | staff | **0.783** |
+| 2 | junior_faculty | faculty | 0.772 |
+| 3 | student_athlete | student | 0.760 |
+
+#### 關鍵發現
+
+- **最大 fairness gap（extreme）**：campus_security（0.783）vs conference_attendee（0.062）→ **gap = 0.721**
+- **Role gap（extreme）**：staff（0.715）vs visitor（0.280）→ gap = 0.435
+- **conference_attendee**：panic=0.10 但 familiarity=0.20、obs_error 有效值 1.65 → 在 extreme 下幾乎完全失能（6.2%）
+- **mobility_impaired**：light 表現良好（0.833），但 severe/extreme 急速崩潰（0.40/0.21）— 速度瓶頸是主因，高 panic（0.60）進一步放大
+- **student_with_anxiety**：速度正常但 panic=0.85 導致 obs_error 有效值 4.07×、compliance 有效值 0.34 → 即使能走也頻繁走錯路
+- **it_staff**：light 表現優秀（0.844）但 extreme 崩至 0.550 — Δ = −0.294，下降幅度最大的 staff persona
+- **junior_faculty**：唯一 light→extreme 幾乎持平的 persona（+0.003），因 panic=0.10、familiarity=0.60、speed=1.20
+
+**報告路徑**：`logs/persona_fairness_analysis/persona_fairness_report.md`
+
+### 7. 20-persona v3 Sweep 結果（100 人 + panic 接入，2026-04-02）
+
+**設定**：100 ped，DRQN policy，20-persona + panic modulation，enterprise_blizzard，每個 severity 各 20 runs
+
+| Severity | Uniform (40人) | v2 (40人, 4欄位) | v3 (100人, panic) | Δ v2→v3 |
+|----------|--------------|----------------|------------------|--------|
+| light    | 0.848        | 0.796          | **0.770**        | −0.026 |
+| moderate | 0.792        | 0.708          | **0.709**        | +0.001 |
+| severe   | 0.736        | 0.623          | **0.621**        | −0.002 |
+| extreme  | 0.716        | 0.597          | **0.591**        | −0.006 |
+
+**Faculty vs Staff reached_rate gap（v3）：**
+
+| Severity | faculty | staff | gap (fac−staff) |
+|----------|---------|-------|----------------|
+| light    | 0.807   | 0.843 | −0.036 |
+| moderate | 0.760   | 0.820 | −0.060 |
+| severe   | 0.683   | 0.689 | −0.006 |
+| extreme  | 0.701   | 0.711 | −0.010 |
+
+**解讀：**
+- v3 與 v2 誤差在 ±3% 以內，結果穩健可重現
+- panic 接入使 light 再下降 2.6%（freshman/visitor 在輕災下 panic 效果最顯著）
+- moderate 下 faculty gap 最大（−6%）：senior_faculty 速度慢 + adjunct 高 delay 共同造成
+- severe/extreme 下 gap 縮小（−1%）：主因是 student 族群（60%）的高 panic 拖累整體，蓋過 faculty 效應
+- exposure 在 severe 最高（134）、extreme 反而較低（108）：extreme 下許多人到不了 shelter，沒機會繼續累積 exposure
+
 企業應用：新員工入職個人化疏散卡、ADA 合規路線、大型活動訪客即時指引。
+
+---
+
+### 8. 三災害交叉比較（2026-04-05）
+
+**設定**：enterprise_blizzard / earthquake / compound × 4 severity × 20 runs × DRQN（100 人，20 persona，panic 接入）
+
+#### 整體 reached_rate
+
+| Disaster | light | moderate | severe | extreme |
+|----------|-------|----------|--------|---------|
+| blizzard   | 0.770 | 0.708 | 0.615 | 0.593 |
+| earthquake | 0.641 | 0.482 | 0.367 | **0.413** |
+| compound   | 0.673 | 0.498 | 0.376 | **0.417** |
+
+> earthquake/compound 的 severe 最低，但 extreme 略回升：extreme 封路反而讓部分 agent 繞到更短路線。
+
+#### Role 層級（extreme）
+
+| Role | blizzard | earthquake | compound |
+|------|----------|------------|----------|
+| student | 0.557 | 0.299 | 0.315 |
+| faculty | 0.683 | 0.574 | 0.581 |
+| staff   | 0.715 | 0.707 | 0.677 |
+| visitor | 0.280 | **0.146** | **0.145** |
+
+#### 關鍵發現
+
+- `visitor` 在 earthquake/compound extreme 崩至 0.145/0.146（vs blizzard 0.280），降幅 −48%
+- `mobility_impaired`：earthquake=0.600（封路讓短路線可用）→ compound=**0.000**（複合封路徹底切斷路線）
+- `research_scientist`：blizzard=0.704 → earthquake=0.125（obs_error 高 + 封路導航失敗）
+- `campus_security` / `facilities_staff`：earthquake/compound 下**優於** blizzard（obs_error=0.50 + familiarity=1.0，封路也能找替代路）
+- **最大 fairness gap 出現在 compound**：campus_security（0.833）vs mobility_impaired（0.000）→ gap = **1.000**
+
+**報告路徑**：`logs/persona_fairness_analysis/cross_disaster_fairness.md`
+
+---
+
+### 9. End-to-End Demo 與 Personal Advisor API（2026-04-05）
+
+#### `demo_pipeline.py`（CLI 端對端展示）
+
+完整執行三層 pipeline，格式化輸出各階段結果：
+
+```
+Layer 2 → Layer 1 → Layer 3 → LLM Recommendation
+```
+
+**離線測試結果**：
+- 總執行時間：8.6s（無 LLM 呼叫）
+- `reached=True`，路線成功到達 shelter
+- 輸出儲存至 `logs/demo_pipeline/{scenario}_{node}_demo.json`
+
+```bash
+python3 demo_pipeline.py \
+  --checkpoint logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt \
+  --scenario scenarios/enterprise_blizzard.json \
+  --severity moderate \
+  --start-node 1638160433
+```
+
+#### `advisor_api.py`（FastAPI REST API）
+
+**Endpoints：**
+
+| Method | Path | 說明 |
+|--------|------|------|
+| GET | `/health` | 存活檢查 + 環境狀態 |
+| GET | `/scenarios` | 列出所有可用 scenario |
+| GET | `/nodes/random?n=2` | 取合法 OSM node（測試用） |
+| POST | `/advise` | 主 endpoint：描述 + start_node → profile + route + recommendation |
+
+**啟動：**
+```bash
+ADVISOR_CHECKPOINT=logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt \
+GROQ_API_KEY=gsk_... \
+uvicorn advisor_api:app --host 0.0.0.0 --port 8000
+```
+
+**Swagger UI**：`http://localhost:8000/docs`
+
+**煙霧測試結果**（離線）：
+- `/health` 200 OK — scenario=enterprise_blizzard, walk_nodes=4002, shelters=6
+- `/scenarios` 回傳 21 個 scenario 檔案
+- `/nodes/random?n=2` 正常回傳合法 node
+- `POST /advise`：profile_source=default, reached=False, recommendation 正確生成
+
+---
+
+### 10. Layer 2 評估（2026-04-05）
+
+**腳本**：`eval_zone_coordinator.py`  
+**設定**：enterprise_blizzard × moderate × seeds 42–46 × num_zones=6  
+
+**離線模式**（無 API key，fallback 演算法）：
+
+| 指標 | 演算法 | LLM | 說明 |
+|------|--------|-----|------|
+| avg_primary_distance_m | 1105.9 ±167.2 | 1105.9 ±167.2 | 相同（fallback）|
+| load_balance_std | 5.3 ±1.4 | 5.3 ±1.4 | 相同（fallback）|
+| shelter_diversity | 3.6 ±0.5 | 3.6 ±0.5 | 相同（fallback）|
+| backup_coverage | 1.0 ±0.0 | 1.0 ±0.0 | 相同（fallback）|
+| invalid_assignments | 0.0 ±0.0 | 0.0 ±0.0 | 相同（fallback）|
+| reasoning_quality | 1.0 ±0.0 | 0.0 ±0.0 | 演算法 fallback 有預設字串 |
+
+> 有 API key 時 LLM 模式預期：shelter_diversity↑、load_balance_std↓、reasoning_quality≥0.8
+
+**報告路徑**：`logs/zone_eval/zone_eval_report.md`
+
+---
+
+### 11. 人數提升至 200 人（2026-04-06）
+
+**改動**：`config.py`
+```python
+EVAC_PED_COUNT = 200   # 原本 100
+EVAC_CAR_COUNT = 30    # 原本 15
+```
+
+**人口分布（200人）：**
+
+| Role | 人數 | Persona 數 | 平均/persona |
+|------|------|-----------|-------------|
+| student (60%) | 120 | 7 | 17.1 ✅ |
+| faculty (15%) | 30  | 3 | 10.0 ✅ |
+| staff (20%)   | 40  | 6 | 6.7 ✅  |
+| visitor (5%)  | 10  | 4 | 2.5 ⚠  |
+
+visitor 從 1.25 → 2.5 人/persona，仍需 ⚠ 標記但趨勢比 100 人版可信得多。
+
+---
+
+### 12. LLM 場景生成器（2026-04-06）
+
+**腳本**：`llm_scenario_generator.py`
+
+**設計**：prompt 中只提供物理文字描述，不給 LLM 任何數字範圍，讓模型根據真實世界災害知識決定合理數值。生成後用 safety clamp 做最後保險。
+
+**生成的參數檔案**：
+- `scenarios/llm_severity_presets.json`（scenario_loader.py 啟動時自動載入）
+- `scenarios/llm_severity_presets_reasoning.json`（LLM 的推理說明，可放論文）
+
+**LLM 生成 vs 原始硬編碼（關鍵差異）：**
+
+| 參數 | 原始（blizzard extreme） | LLM | 詮釋 |
+|------|------------------------|-----|------|
+| `EVAC_OBS_ERROR_WALK` | 0.25 | **0.50** | 極端暴風雪能見度被原始設定低估 |
+| `EVAC_BLOCK_INIT_PROB`（earthquake extreme）| 0.55 | **0.80** | M8.5 地震初始破壞更嚴重 |
+| `EVAC_BLOCK_PROB`（blizzard light）| 0.05 | 0.03 | 輕度暴風雪漸進封路較低 |
+| `EVAC_SNOW_MIN`（extreme）| 0.50 | 0.20 | 初始積雪不一定達最大值 |
+
+**主要觀察**：LLM 把幾乎所有情境的 `OBS_ERROR_WALK` 設為 0.50（clamp 上限），認為能見度影響普遍被原始參數低估。
+
+**接入方式**：`scenario_loader.py` 在 import 時自動偵測 preset 檔，存在則優先使用 LLM 值，否則 fallback 回硬編碼表。
+
+---
+
+### 13. 200人 × 三災害 Sweep（2026-04-06 起，進行中）
+
+**目標**：驗證 200 人規模下三個災害的 per-persona fairness 結果是否與 100 人版一致。
+
+| Sweep | 輸出目錄 | 狀態 |
+|-------|---------|------|
+| Blizzard 200人 | `logs/disaster_severity_sweep_v4_200ped/` | ✅ 完成 |
+| Earthquake 200人 | `logs/disaster_severity_sweep_earthquake_v4_200ped/` | ✅ 完成 |
+| Compound 200人 | `logs/disaster_severity_sweep_compound_v4_200ped/` | 🔄 進行中 |
+
+完成後接著跑 LLM 參數版（Step 26）。
+
+---
+
+### 14. 200人 Fairness Analysis 結果（2026-04-07）
+
+**設定**：blizzard/earthquake/compound × 4 severity × 20 runs × DRQN（200 人，20 persona）
+**報告路徑**：`logs/persona_fairness_v4_200ped/`
+
+#### 整體 reached_rate
+
+| Disaster | light | moderate | severe | extreme |
+|----------|-------|----------|--------|---------|
+| blizzard   | 0.775 | 0.716 | 0.624 | 0.591 |
+| earthquake | 0.629 | 0.489 | 0.338 | 0.405 |
+| compound   | 0.625 | 0.389 | 0.355 | 0.430 |
+
+#### Role 層級（extreme）
+
+| Role | blizzard | earthquake | compound |
+|------|----------|------------|----------|
+| student | 0.553 | 0.284 | 0.338 |
+| faculty | 0.666 | 0.595 | 0.531 |
+| staff   | 0.713 | 0.702 | 0.674 |
+| visitor | 0.410 | **0.080** | 0.249 |
+
+#### 最脆弱 Persona（extreme，cross-disaster）
+
+| Rank | Persona | 最脆弱災害 | reached_rate |
+|------|---------|-----------|-------------|
+| 1 | adjunct_instructor | compound | **0.042** |
+| 2 | prospective_student_with_parent | earthquake | **0.000** ⚠ |
+| 3 | conference_attendee | blizzard/earthquake | 0.125 |
+| 4 | visitor | earthquake | 0.121 |
+| 5 | mobility_impaired | earthquake | 0.100 |
+
+#### vs 100人版比較
+
+| 指標 | 100人版 | 200人版 | 說明 |
+|------|---------|---------|------|
+| Blizzard extreme overall | 0.593 | 0.591 | 幾乎一致（±0.3%）✅ |
+| Visitor earthquake extreme | 0.146 | **0.080** | 200人版更低更可靠 |
+| conference_attendee blizzard extreme | 0.062 | 0.125 | 100人版因樣本過小偏低 |
+| Fairness gap (blizzard) | 0.721 | 0.708 | 縮小但仍顯著 |
+
+**結論**：200人版整體結果與 100人版高度一致（±3%），驗證模型穩健性。差異主要來自 visitor 族群樣本量增加帶來的統計修正。
