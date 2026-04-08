@@ -1,4 +1,5 @@
 import math
+from collections import defaultdict
 
 
 def _percentile_reach_step(reached_steps, total_agents, q):
@@ -11,6 +12,46 @@ def _percentile_reach_step(reached_steps, total_agents, q):
     return reached_steps[threshold - 1]
 
 
+def _persona_reached_rates(agents):
+    """Compute per-persona reached_rate for all personas present in agents.
+
+    Returns a dict: { "persona_<name>_reached_rate": float, ... }
+    Only includes personas with at least 1 agent.
+    """
+    counts = defaultdict(int)
+    reached = defaultdict(int)
+    for a in agents:
+        persona = getattr(a, "persona", None)
+        if not persona:
+            continue
+        counts[persona] += 1
+        if a.reached:
+            reached[persona] += 1
+    result = {}
+    for persona, n in counts.items():
+        result[f"persona_{persona}_reached_rate"] = round(reached[persona] / n, 4)
+        result[f"persona_{persona}_count"] = n
+    return result
+
+
+def _role_reached_rates(agents):
+    """Compute per-role reached_rate for all 4 role categories."""
+    counts = defaultdict(int)
+    reached = defaultdict(int)
+    for a in agents:
+        role = getattr(a, "role", None)
+        if not role:
+            continue
+        counts[role] += 1
+        if a.reached:
+            reached[role] += 1
+    result = {}
+    for role, n in counts.items():
+        result[f"role_{role}_reached_rate"] = round(reached[role] / n, 4)
+        result[f"role_{role}_count"] = n
+    return result
+
+
 def summarize_run(step_rows, peds, cars, edge_counts, step_limit, scenario_name, seed, policy_name, extra_metrics=None):
     agents = list(peds) + list(cars)
     total = len(agents)
@@ -19,6 +60,7 @@ def summarize_run(step_rows, peds, cars, edge_counts, step_limit, scenario_name,
     reached_steps = [a.steps for a in reached]
     avg_exp = (sum(a.exposure for a in agents) / total) if total else 0.0
 
+    # Legacy binary role tracking (backward compatibility)
     faculty = [a for a in agents if a.role == "faculty"]
     staff = [a for a in agents if a.role == "staff"]
     faculty_reached_rate = (sum(1 for a in faculty if a.reached) / len(faculty)) if faculty else 0.0
@@ -46,6 +88,10 @@ def summarize_run(step_rows, peds, cars, edge_counts, step_limit, scenario_name,
         "reach_rate_gap": round(faculty_reached_rate - staff_reached_rate, 4),
         "top_bottlenecks": top_edges_str,
     }
+    # Per-persona and per-role breakdowns
+    summary.update(_persona_reached_rates(agents))
+    summary.update(_role_reached_rates(agents))
+
     if extra_metrics:
         summary.update(extra_metrics)
     return summary
@@ -59,22 +105,45 @@ def aggregate_policy_rows(rows):
         values = [r[field] for r in rows]
         return sum(values) / len(values)
 
+    def _avg_optional(field):
+        values = [r[field] for r in rows if r.get(field) is not None]
+        return round(sum(values) / len(values), 4) if values else None
+
     t95_values = [r["t95_step"] for r in rows if r["t95_step"] is not None]
     t90_values = [r["t90_step"] for r in rows if r["t90_step"] is not None]
-    faculty_values = [r["faculty_reached_rate"] for r in rows if r.get("faculty_reached_rate") is not None]
-    staff_values = [r["staff_reached_rate"] for r in rows if r.get("staff_reached_rate") is not None]
-    gap_values = [r["reach_rate_gap"] for r in rows if r.get("reach_rate_gap") is not None]
     reassign_values = [r["shelter_reassignments"] for r in rows if r.get("shelter_reassignments") is not None]
-    return {
+
+    result = {
         "runs": len(rows),
         "avg_reached_rate": round(_avg("reached_rate"), 4),
         "avg_alive_rate": round(_avg("alive_rate"), 4),
         "avg_exposure_total": round(_avg("avg_exposure_total"), 4),
         "avg_t90_step": round(sum(t90_values) / len(t90_values), 2) if t90_values else None,
         "avg_t95_step": round(sum(t95_values) / len(t95_values), 2) if t95_values else None,
-        "avg_faculty_reached_rate": round(sum(faculty_values) / len(faculty_values), 4) if faculty_values else None,
-        "avg_staff_reached_rate": round(sum(staff_values) / len(staff_values), 4) if staff_values else None,
-        "avg_reach_rate_gap": round(sum(gap_values) / len(gap_values), 4) if gap_values else None,
+        "avg_faculty_reached_rate": _avg_optional("faculty_reached_rate"),
+        "avg_staff_reached_rate": _avg_optional("staff_reached_rate"),
+        "avg_reach_rate_gap": _avg_optional("reach_rate_gap"),
         "avg_shelter_reassignments": round(sum(reassign_values) / len(reassign_values), 2) if reassign_values else None,
         "shelter_capacity_enabled": any(bool(r.get("shelter_capacity_enabled", False)) for r in rows),
     }
+
+    # Aggregate per-persona reached rates and counts across all runs
+    persona_keys = set()
+    persona_count_keys = set()
+    role_keys = set()
+    for r in rows:
+        for k in r:
+            if k.startswith("persona_") and k.endswith("_reached_rate"):
+                persona_keys.add(k)
+            if k.startswith("persona_") and k.endswith("_count"):
+                persona_count_keys.add(k)
+            if k.startswith("role_") and k.endswith("_reached_rate"):
+                role_keys.add(k)
+    for k in sorted(persona_keys):
+        result[f"avg_{k}"] = _avg_optional(k)
+    for k in sorted(persona_count_keys):
+        result[k] = _avg_optional(k)   # avg agents/run for this persona
+    for k in sorted(role_keys):
+        result[f"avg_{k}"] = _avg_optional(k)
+
+    return result

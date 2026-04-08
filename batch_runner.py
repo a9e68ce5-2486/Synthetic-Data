@@ -82,17 +82,27 @@ def _apply_compliance(agent, policy_goal, familiar_goals):
     return policy_goal
 
 def _apply_persona(agent, persona_name: str):
-    """Apply LLM-generated behavior profile to an agent."""
+    """Apply LLM-generated behavior profile to an agent.
+
+    panic_level (0–1) is baked into two fields at creation time so the
+    rest of the simulation reads them naturally:
+      - observation_error_multiplier *= (1 + panic_level)
+        → panicky agents misread their environment more
+      - compliance_rate *= (1 - 0.5 * panic_level)
+        → panicky agents are less likely to follow shelter recommendations
+    """
     if not persona_name or persona_name not in _AGENT_PROFILES:
         return
     p = _AGENT_PROFILES[persona_name]
+    panic = float(p.get("panic_level", 0.0))
     agent.persona                    = persona_name
     agent.speed_multiplier           = float(p.get("walk_speed_multiplier", 1.0))
-    agent.compliance_rate            = float(p.get("compliance_rate", 1.0))
-    agent.panic_level                = float(p.get("panic_level", 0.0))
-    agent.observation_error_multiplier = float(p.get("observation_error_multiplier", 1.0))
+    agent.panic_level                = panic
     agent.decision_delay_steps       = int(p.get("decision_delay_steps", 0))
     agent.shelter_familiarity        = float(p.get("shelter_familiarity", 1.0))
+    # Effective values after panic modulation
+    agent.compliance_rate            = float(p.get("compliance_rate", 1.0)) * (1.0 - 0.5 * panic)
+    agent.observation_error_multiplier = float(p.get("observation_error_multiplier", 1.0)) * (1.0 + panic)
 
 import networkx as nx
 import numpy as np
@@ -165,7 +175,7 @@ class _DRQNPedController:
 
         self._torch = torch
         self.hidden = {}
-        self.obs_dim = 7 + 5 * self.max_neighbors
+        self.obs_dim = 12 + 5 * self.max_neighbors  # 7 base + 5 persona + 5*k neighbors
         self.agent_checkpoints = {}
         self.agent_checkpoint_idx = {}
         self.agent_current_target = {}
@@ -337,7 +347,7 @@ class _DRQNPedController:
         ranked.sort(reverse=True)
         return [n for *_rest, n in ranked[: self.max_neighbors]]
 
-    def _obs(self, agent_id, node, target, final_goal, step):
+    def _obs(self, agent_id, node, target, final_goal, step, agent=None):
         if node not in self.env.pos or target not in self.env.pos:
             dx = 0.0
             dy = 0.0
@@ -362,6 +372,25 @@ class _DRQNPedController:
             snow_avg = sum(float(v["snow"]) for v in local.values()) / len(local)
         t = step / float(max(1, self.max_steps))
         features = [dx, dy, final_dx, final_dy, blocked_ratio, snow_avg, t]
+
+        # Persona features (5 dims)
+        if agent is not None:
+            panic = float(getattr(agent, "panic_level", 0.0))
+            speed = float(getattr(agent, "speed_multiplier", 1.0))
+            familiarity = float(getattr(agent, "shelter_familiarity", 0.5))
+            compliance = float(getattr(agent, "compliance_rate", 0.8))
+            obs_err = float(getattr(agent, "observation_error_multiplier", 1.0))
+            eff_compliance = min(1.0, max(0.0, compliance * (1.0 - 0.5 * panic)))
+            eff_obs_err = min(1.0, max(0.0, obs_err * (1.0 + panic) / 3.0))
+            features.extend([
+                min(1.0, speed / 1.5),
+                panic,
+                familiarity,
+                eff_compliance,
+                eff_obs_err,
+            ])
+        else:
+            features.extend([0.667, 0.0, 0.5, 0.8, 0.333])  # default neutral persona
         try:
             base_goal_dist = float(nx.shortest_path_length(self.env.G_walk, node, target, weight="weight"))
         except Exception:
@@ -408,7 +437,7 @@ class _DRQNPedController:
 
         prev_max_steps = self.max_steps
         self.max_steps = int(self.agent_step_budget.get(agent.id, self.base_max_steps))
-        obs = self._obs(agent.id, agent.node, target, goal, step)
+        obs = self._obs(agent.id, agent.node, target, goal, step, agent=agent)
         obs_t = self._torch.tensor(obs, dtype=self._torch.float32, device=self.device).unsqueeze(0)
         h_prev = self.hidden.get(agent.id, self.model.init_hidden(device=self.device))
         with self._torch.no_grad():
@@ -454,7 +483,7 @@ class _DRQNPedController:
 
         prev_max_steps = self.max_steps
         self.max_steps = int(self.agent_step_budget.get(agent.id, self.base_max_steps))
-        obs = self._obs(agent.id, agent.node, target, goal, step)
+        obs = self._obs(agent.id, agent.node, target, goal, step, agent=agent)
         obs_t = self._torch.tensor(obs, dtype=self._torch.float32, device=self.device).unsqueeze(0)
         h_prev = self.hidden.get(agent.id, self.model.init_hidden(device=self.device))
         with self._torch.no_grad():

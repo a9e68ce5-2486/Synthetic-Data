@@ -60,3 +60,94 @@ For each scenario:
 - Improvement vs baseline (`round_robin`)
 - `avg_t95_step` if available
 - Fairness check using `reach_rate_gap`
+
+## DRQN Adjustment and Training Record (2026-03-17)
+
+### Implementation Adjustments Completed
+
+- Switched DRQN action space from fixed `N/S/E/W` to `top-k neighbor candidates` per current OSM node.
+- Added `padding + action mask`; Q argmax is restricted to valid actions only.
+- Added masked Double DQN target selection (next-action selection also uses mask).
+- Added sequence replay compatibility for masks (store current and next action mask in replay).
+- Removed fallback-grid dependency from DRQN environment; DRQN now requires OSM graph.
+- Refactored reward to KPI-aligned weighted form:
+  - maximize: reached/alive
+  - minimize: exposure/time
+- Added configurable reward/hazard parameters to CLI and checkpoint metadata.
+- Added stability presets:
+  - `stable_v1`
+  - `stable_v2` (easier curriculum + smoother hazard settings)
+
+### Latest Multi-seed Result Snapshot (`stable_v1`)
+
+Run command family:
+- `venv/bin/python run_drqn_multiseed.py --preset stable_v1 --seeds 42,52,62 --output-root logs/drqn_multiseed_stable_v1`
+
+Observed behavior:
+- Training occasionally reaches shelter in some episodes, but most episodes still end with timeout.
+- Example (seed 62): sporadic success at episodes 160/180/280/380/520/580, but many failures remain.
+
+Aggregate evaluation:
+- `return_mean_mean = -162.4299`
+- `return_mean_std = 14.4622`
+- `reached_rate_mean = 0.0083`
+- `reached_rate_std = 0.0118`
+- `steps_mean_mean = 119.2150`
+- `steps_mean_std = 1.1102`
+
+Per-seed eval summary:
+- seed 42: `eval_reached_rate = 0.0`, `eval_return_mean = -173.0470`, `eval_steps_mean = 120.0`
+- seed 52: `eval_reached_rate = 0.0`, `eval_return_mean = -172.2604`, `eval_steps_mean = 120.0`
+- seed 62: `eval_reached_rate = 0.025`, `eval_return_mean = -141.9822`, `eval_steps_mean = 117.645`
+
+### Current Status
+
+- DRQN pipeline is functional end-to-end (train, best-checkpoint selection, evaluation, plotting).
+- Learning stability and success rate are not yet sufficient for final comparison against frozen heuristic baselines.
+- Next run should prioritize `stable_v2` preset and then compare improvements in `reached_rate_mean` and `steps_mean_mean`.
+
+---
+
+## Phase 3: LLM Agent Extension (Active)
+
+### Architecture
+
+Three-layer pipeline on top of Phase 2 DRQN:
+
+| Layer | File | Status |
+|-------|------|--------|
+| Layer 1 — LLM Behavior Profiling | `llm_behavior_profiler.py`, `agent_profiles.json` | ✅ Complete |
+| Layer 2 — LLM Zone Coordinator | `llm_zone_coordinator.py` | ✅ Complete |
+| Layer 2 — Zone Eval | `eval_zone_coordinator.py` | ✅ Complete |
+| Layer 3 — DRQN Navigation | `batch_runner.py`, `drqn_minimal.py` | ✅ Complete |
+| Personal Advisor (CLI) | `personal_advisor.py` | ✅ Complete |
+| Personal Advisor (API) | `advisor_api.py` | ✅ Complete |
+| End-to-end demo | `demo_pipeline.py` | ✅ Complete |
+| Fairness analysis | `analyze_persona_fairness.py` | ✅ Complete |
+| Map visualization | `visualize_map.py` | ✅ Complete |
+
+### Key Results (Phase 3)
+
+**Persona heterogeneity (blizzard, extreme):**
+- DRQN uniform: 0.716 reached_rate
+- DRQN 20-persona v3 (100 agents, all fields wired): **0.593**
+- Fairness gap: campus_security 0.783 ↔ conference_attendee 0.062 → gap = **0.721**
+
+**Disaster cross-comparison (extreme):**
+- Blizzard overall: 0.593 | Earthquake: 0.413 | Compound: 0.417
+- Visitor role: blizzard 0.280 → earthquake/compound ~0.145 (−48%)
+- Compound worst fairness gap: campus_security 0.833 vs mobility_impaired 0.000
+
+**Personal Advisor API:**
+- Start server: `uvicorn advisor_api:app --port 8000`
+- POST `/advise` → profile + route + NL recommendation
+- Swagger UI: `http://localhost:8000/docs`
+
+### Scenario Files (Phase 3 Sweeps)
+
+| Sweep | Scenario | Output dir |
+|-------|----------|-----------|
+| Blizzard 4×severity | `enterprise_blizzard.json` | `logs/disaster_severity_sweep/` |
+| Earthquake 4×severity | `enterprise_earthquake.json` | `logs/disaster_severity_sweep_earthquake/` |
+| Compound 4×severity | `enterprise_compound.json` | `logs/disaster_severity_sweep_compound/` |
+| Layer 2 eval | `enterprise_blizzard.json` | `logs/zone_eval/` |

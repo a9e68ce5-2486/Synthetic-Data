@@ -1,0 +1,164 @@
+{
+  "blizzard": {
+    "light": {
+      "EVAC_BLOCK_PROB": 0.03,
+      "EVAC_BLOCK_INIT_PROB": 0.0,
+      "EVAC_SNOW_MIN": 0.05,
+      "EVAC_SNOW_MAX": 0.3,
+      "EVAC_SNOW_ALPHA": 1.2,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.001,
+      "EVAC_SNOW_ACCUM_NOISE": 0.0002,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.8,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.01,
+      "EVAC_OBS_ERROR_WALK": 0.2,
+      "EVAC_OBS_ERROR_DRIVE": 0.05
+    },
+    "moderate": {
+      "EVAC_BLOCK_PROB": 0.05,
+      "EVAC_BLOCK_INIT_PROB": 0.01,
+      "EVAC_SNOW_MIN": 0.1,
+      "EVAC_SNOW_MAX": 0.6,
+      "EVAC_SNOW_ALPHA": 1.5,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.001,
+      "EVAC_SNOW_ACCUM_NOISE": 0.0002,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.4,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.02,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.5
+    },
+    "severe": {
+      "EVAC_BLOCK_PROB": 0.15,
+      "EVAC_BLOCK_INIT_PROB": 0.01,
+      "EVAC_SNOW_MIN": 0.2,
+      "EVAC_SNOW_MAX": 0.8,
+      "EVAC_SNOW_ALPHA": 1.8,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.005,
+      "EVAC_SNOW_ACCUM_NOISE": 0.001,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.6,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.03,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.5
+    },
+    "extreme": {
+      "EVAC_BLOCK_PROB": 0.25,
+      "EVAC_BLOCK_INIT_PROB": 0.05,
+      "EVAC_SNOW_MIN": 0.2,
+      "EVAC_SNOW_MAX": 0.95,
+      "EVAC_SNOW_ALPHA": 2.5,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.005,
+      "EVAC_SNOW_ACCUM_NOISE": 0.001,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.4,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.03,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.5
+    }
+  },
+  "earthquake": {
+    "light": {
+      "EVAC_BLOCK_PROB": 0.05,
+      "EVAC_BLOCK_INIT_PROB": 0.2,
+      "EVAC_SNOW_MIN": 0.01,
+      "EVAC_SNOW_MAX": 0.1,
+      "EVAC_SNOW_ALPHA": 1.1,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.0005,
+      "EVAC_SNOW_ACCUM_NOISE": 0.0001,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.5,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.01,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.5
+    },
+    "moderate": {
+      "EVAC_BLOCK_PROB": 0.15,
+      "EVAC_BLOCK_INIT_PROB": 0.4,
+      "EVAC_SNOW_MIN": 0.05,
+      "EVAC_SNOW_MAX": 0.2,
+      "EVAC_SNOW_ALPHA": 1.2,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.001,
+      "EVAC_SNOW_ACCUM_NOISE": 0.0005,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.3,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.03,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.5
+    },
+    "severe": {
+      "EVAC_BLOCK_PROB": 0.25,
+      "EVAC_BLOCK_INIT_PROB": 0.6,
+      "EVAC_SNOW_MIN": 0.05,
+      "EVAC_SNOW_MAX": 0.3,
+      "EVAC_SNOW_ALPHA": 1.5,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.001,
+      "EVAC_SNOW_ACCUM_NOISE": 0.0002,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.3,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.03,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.5
+    },
+    "extreme": {
+      "EVAC_BLOCK_PROB": 0.35,
+      "EVAC_BLOCK_INIT_PROB": 0.8,
+      "EVAC_SNOW_MIN": 0.05,
+      "EVAC_SNOW_MAX": 0.4,
+      "EVAC_SNOW_ALPHA": 1.5,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.001,
+      "EVAC_SNOW_ACCUM_NOISE": 0.0002,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.3,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.03,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.5
+    }
+  },
+  "compound": {
+    "light": {
+      "EVAC_BLOCK_PROB": 0.02,
+      "EVAC_BLOCK_INIT_PROB": 0.05,
+      "EVAC_SNOW_MIN": 0.05,
+      "EVAC_SNOW_MAX": 0.3,
+      "EVAC_SNOW_ALPHA": 1.2,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.0005,
+      "EVAC_SNOW_ACCUM_NOISE": 0.0001,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.3,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.01,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.2
+    },
+    "moderate": {
+      "EVAC_BLOCK_PROB": 0.15,
+      "EVAC_BLOCK_INIT_PROB": 0.25,
+      "EVAC_SNOW_MIN": 0.1,
+      "EVAC_SNOW_MAX": 0.7,
+      "EVAC_SNOW_ALPHA": 1.5,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.005,
+      "EVAC_SNOW_ACCUM_NOISE": 0.001,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.4,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.03,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.5
+    },
+    "severe": {
+      "EVAC_BLOCK_PROB": 0.25,
+      "EVAC_BLOCK_INIT_PROB": 0.4,
+      "EVAC_SNOW_MIN": 0.2,
+      "EVAC_SNOW_MAX": 0.8,
+      "EVAC_SNOW_ALPHA": 1.8,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.005,
+      "EVAC_SNOW_ACCUM_NOISE": 0.001,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.5,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.03,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.5
+    },
+    "extreme": {
+      "EVAC_BLOCK_PROB": 0.35,
+      "EVAC_BLOCK_INIT_PROB": 0.6,
+      "EVAC_SNOW_MIN": 0.2,
+      "EVAC_SNOW_MAX": 0.95,
+      "EVAC_SNOW_ALPHA": 2.5,
+      "EVAC_SNOW_ACCUM_PER_STEP": 0.005,
+      "EVAC_SNOW_ACCUM_NOISE": 0.001,
+      "EVAC_BLOCK_FROM_SNOW_THRESHOLD": 0.4,
+      "EVAC_BLOCK_FROM_SNOW_PROB": 0.03,
+      "EVAC_OBS_ERROR_WALK": 0.5,
+      "EVAC_OBS_ERROR_DRIVE": 0.5
+    }
+  }
+}

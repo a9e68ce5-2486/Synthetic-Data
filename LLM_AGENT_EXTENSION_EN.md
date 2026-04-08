@@ -345,7 +345,7 @@ Retains the existing DRQN system. Receives Layer 1 persona parameters as agent i
 
 ---
 
-## 5. Implementation Progress (2026-04-01)
+## 5. Implementation Progress (2026-04-02)
 
 | Step | Task | Status |
 |------|------|--------|
@@ -358,10 +358,127 @@ Retains the existing DRQN system. Receives Layer 1 persona parameters as agent i
 | 7 | Expand to 20 personas across 4 role categories (realistic campus population) | ✅ Done |
 | 8 | Fix: wire obs_error / familiarity / compliance / delay into simulation | ✅ Done |
 | 9 | 20-persona v2 severity sweep + all-policies full comparison | ✅ Done |
-| 10 | Personal Advisor: natural language input → personalized evacuation recommendation | ⬜ Planned |
-| 11 | `llm_zone_coordinator.py` (ReAct loop + 4 tools) | ⬜ Planned |
-| 12 | LLM coordinator vs DRQN zone recommendation comparison | ⬜ Planned |
-| 13 | End-to-end three-layer pipeline integration | ⬜ Planned |
+| 10 | Wire `panic_level` into simulation (amplifies obs_error, reduces compliance) | ✅ Done |
+| 11 | `llm_zone_coordinator.py` — ReAct loop + 4 tools + algorithmic fallback | ✅ Done |
+| 12 | `personal_advisor.py` — NL description → LLM profile → DRQN → NL recommendation | ✅ Done |
+| 13 | Raise `EVAC_PED_COUNT` to 100 for per-persona statistical analysis | ✅ Done |
+| 14 | 20-persona v3 sweep (100 agents, panic wired) | ✅ Done |
+| 15 | Per-persona fairness analysis + `analyze_persona_fairness.py` | ✅ Done |
+| 16 | Map visualization `visualize_map.py` (folium, route + simulation modes) | ✅ Done |
+| 17 | Earthquake / Compound persona sweep | ✅ Done |
+| 18 | End-to-end demo script (`demo_pipeline.py`) | ✅ Done |
+| 19 | Layer 2 evaluation: LLM coordinator vs algorithmic (`eval_zone_coordinator.py`) | ✅ Done |
+| 20 | DRQN obs vector with persona fields (retrain) | ⬜ Planned |
+| 21 | Personal Advisor API (FastAPI endpoint, `advisor_api.py`) | ✅ Done |
+| 22 | End-to-end three-layer pipeline integration | ⬜ Planned |
+| 23 | Scale to 200 agents (student×120, faculty×30, staff×40, visitor×10) | ✅ Done |
+| 24 | LLM scenario generator (`llm_scenario_generator.py`) — NL description → disaster params | ✅ Done |
+| 25 | 200-agent × original params three-disaster sweep | ✅ Done |
+| 26 | 200-agent × LLM-generated params three-disaster sweep | ⬜ Planned |
+
+### LLM Scenario Generator (Step 24, 2026-04-06)
+
+**Script**: `llm_scenario_generator.py`
+
+**Design**: The LLM receives only physical descriptions of each parameter — no numeric ranges are given in the prompt. The LLM uses its own knowledge of real-world disasters to decide what values are physically reasonable. A safety clamp is applied post-generation as a hard guardrail only.
+
+**Run**:
+```bash
+python3 llm_scenario_generator.py --api-key $GROQ_API_KEY --verbose --compare
+```
+
+**Outputs**:
+- `scenarios/llm_severity_presets.json` — parameters (auto-loaded by `scenario_loader.py`)
+- `scenarios/llm_severity_presets_reasoning.json` — LLM reasoning per scenario (citable in paper)
+
+**Key differences vs hand-coded values:**
+
+| Parameter | Original (blizzard extreme) | LLM | Interpretation |
+|-----------|----------------------------|-----|----------------|
+| `EVAC_OBS_ERROR_WALK` | 0.25 | **0.50** | LLM judges whiteout visibility as more severe |
+| `EVAC_BLOCK_INIT_PROB` (earthquake extreme) | 0.55 | **0.80** | LLM judges M8.5 initial structural collapse as worse |
+| `EVAC_BLOCK_PROB` (blizzard light) | 0.05 | 0.03 | LLM judges light blizzard road closure rate as lower |
+| `EVAC_SNOW_MIN` (extreme) | 0.50 | 0.20 | LLM judges initial snow cover not necessarily maximum |
+
+**Integration**: `scenario_loader.py` detects `scenarios/llm_severity_presets.json` at import time; if found, LLM values take priority over hard-coded tables. Falls back to hard-coded if file absent.
+
+---
+
+### Layer 2 Evaluation Results (2026-04-02)
+
+**Script**: `eval_zone_coordinator.py`  
+**Setup**: enterprise_blizzard × moderate × seeds 42–46 × num_zones=6  
+
+**Metrics** (6 dimensions):
+
+| Metric | Description | Better |
+|--------|-------------|--------|
+| avg_primary_distance_m | Mean graph distance from zone members to assigned shelter | lower |
+| load_balance_std | Std of demand per shelter | lower |
+| shelter_diversity | Number of distinct shelters used | higher |
+| backup_coverage | Fraction of zones with a valid backup shelter | higher |
+| invalid_assignments | Fraction of hallucinated shelter IDs | lower |
+| reasoning_quality | Fraction of zones with meaningful LLM reasoning | higher |
+
+**Offline mode results (no Groq API key — algorithmic fallback for both):**
+
+| Metric | Algorithmic | LLM Coordinator | Winner |
+|--------|-------------|-----------------|--------|
+| Avg distance to shelter (m) | 1105.9 ±167.2 | 1105.9 ±167.2 | tie |
+| Load balance std | 5.3 ±1.4 | 5.3 ±1.4 | tie |
+| Distinct shelters used | 3.6 ±0.5 | 3.6 ±0.5 | tie |
+| Backup shelter coverage | 1.0 ±0.0 | 1.0 ±0.0 | tie |
+| Invalid assignments | 0.0 ±0.0 | 0.0 ±0.0 | tie |
+| Reasoning quality | 1.0 ±0.0 | 0.0 ±0.0 | Algo |
+
+> **Note**: In offline mode, LLM coordinator falls back to algorithmic 100% of the time (no API key), so the first five metrics are identical. Reasoning quality shows 1.0 for algorithmic because the fallback fills in `"algorithmic"` as reasoning text.  
+> **To run with LLM**: `python eval_zone_coordinator.py --scenario scenarios/enterprise_blizzard.json --api-key $GROQ_API_KEY --seeds 42 43 44 45 46`  
+> Expected LLM behavior: higher shelter_diversity (LLM tends to distribute load), lower load_balance_std (capacity-aware reasoning), reasoning_quality ≥ 0.8.
+
+**Output**: `logs/zone_eval/zone_eval_report.md`, `logs/zone_eval/zone_eval_results.json`
+
+---
+
+### Per-Persona Fairness Analysis Results (2026-04-03)
+
+**Setup**: enterprise_blizzard × 4 severities × 20 runs × DRQN (100 agents, 20 personas, panic wired)
+
+#### Role-level reached_rate
+
+| Severity | Overall | student | faculty | staff | visitor |
+|----------|---------|---------|---------|-------|---------|
+| light    | 0.770 | 0.756 | 0.788 | 0.839 | 0.647 |
+| moderate | 0.708 | 0.676 | 0.719 | 0.846 | 0.551 |
+| severe   | 0.615 | 0.584 | 0.673 | 0.701 | 0.429 |
+| extreme  | 0.593 | 0.557 | 0.683 | 0.715 | 0.280 |
+
+#### Key findings
+
+- **Fairness gap (extreme)**: campus_security (0.783) vs conference_attendee (0.062) → **gap = 0.721**
+- **Role gap (extreme)**: staff (0.715) vs visitor (0.280) → gap = 0.435
+- `conference_attendee`: collapses to 6.2% under extreme — familiarity=0.20, effective obs_error=1.65×
+- `mobility_impaired`: 0.833 under light → 0.214 under extreme — speed bottleneck amplified by severe conditions
+- `junior_faculty`: only persona stable across all severities (+0.003 light→extreme)
+- **These results directly motivate the Personal Advisor system**
+
+### Personal Advisor Design Decision (2026-04-03)
+
+**Route output: static snapshot (Direction A)**
+
+`extract_route()` runs one full simulation. The output `path_nodes` already incorporates all road blockages and DRQN replanning:
+
+```
+Agent encounters blocked road during simulation → DRQN replans → continues → final path_nodes
+```
+
+- Output route = final path after all blockage detours; `replan_count` records mid-route replans
+- LLM output includes alternative route guidance whenever `replan_count > 0` or `severity = severe/extreme`
+- Guidance detail scales with `shelter_familiarity` (high → brief; low/none → full step-by-step)
+- **Blocked-road alternative is always included for all personas**, regardless of familiarity level
+
+**Future Work — Dynamic updates (Direction B):**
+
+User transmits current GPS position continuously; system re-calls `advise()` and updates route in real time. Requires a mobile frontend that maps GPS coordinates to OSM node IDs.
 
 ### Full Comparison Results (2026-04-02)
 

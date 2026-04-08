@@ -1,0 +1,5 @@
+scenario,disaster_type,severity,policy,runs,avg_reached_rate,avg_alive_rate,avg_exposure_total,avg_t90_step,avg_t95_step,avg_reach_rate_gap,avg_shelter_reassignments,avg_faculty_reached_rate,avg_staff_reached_rate
+enterprise_earthquake,earthquake,light,drqn,20,0.6291,1.0,132.833,,,0.0411,0.0,0.7768,0.7357
+enterprise_earthquake,earthquake,moderate,drqn,20,0.4891,1.0,169.7981,,,-0.1124,0.0,0.5361,0.6485
+enterprise_earthquake,earthquake,severe,drqn,20,0.3382,1.0,185.5086,,,-0.195,0.0,0.4204,0.6155
+enterprise_earthquake,earthquake,extreme,drqn,20,0.4054,1.0,138.2769,,,-0.1066,0.0,0.595,0.7016

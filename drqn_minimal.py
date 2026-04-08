@@ -1,5 +1,6 @@
 import argparse
 import csv
+import json
 import os
 import random
 from collections import deque
@@ -106,7 +107,8 @@ class GridPOMDPEnv:
         self._prev_goal_dist = None
         self._curr_action_mask = np.zeros(self.num_actions, dtype=np.float32)
         self._curr_candidates = []
-        self.obs_dim = 7 + 5 * self.max_neighbors
+        self.obs_dim = 12 + 5 * self.max_neighbors  # 7 base + 5 persona + 5*k neighbors
+        self._persona_features = np.zeros(5, dtype=np.float32)  # [speed, panic, familiarity, compliance, obs_err]
         self._failure_memory = {}
         self._checkpoint_nodes = []
         self._checkpoint_idx = 0
@@ -323,6 +325,20 @@ class GridPOMDPEnv:
             return
         self._failure_memory.pop((u, v), None)
 
+    def set_persona(self, walk_speed_multiplier=1.0, panic_level=0.0,
+                    shelter_familiarity=0.5, compliance_rate=0.8,
+                    observation_error_multiplier=1.0):
+        """Set normalized persona features for the current episode."""
+        eff_compliance = compliance_rate * (1.0 - 0.5 * panic_level)
+        eff_obs_err = observation_error_multiplier * (1.0 + panic_level) / 3.0
+        self._persona_features = np.array([
+            min(1.0, walk_speed_multiplier / 1.5),
+            float(panic_level),
+            float(shelter_familiarity),
+            min(1.0, max(0.0, eff_compliance)),
+            min(1.0, max(0.0, eff_obs_err)),
+        ], dtype=np.float32)
+
     def _obs(self):
         target = self._target_node()
         if self.node not in self.env.pos or target not in self.env.pos:
@@ -349,6 +365,9 @@ class GridPOMDPEnv:
             snow_avg = sum(float(v["snow"]) for v in local.values()) / len(local)
         t = self.steps / float(self.max_steps)
         features = [dx, dy, final_dx, final_dy, blocked_ratio, snow_avg, t]
+
+        # Persona features (5 dims): normalized so values stay in ~[0, 1]
+        features.extend(self._persona_features.tolist())
 
         base_goal_dist = self._goal_dist()
         for idx in range(self.max_neighbors):
@@ -554,6 +573,20 @@ def _pick_device(device_arg):
     return torch.device("cpu")
 
 
+def _load_persona_pool():
+    """Load all persona definitions from agent_profiles.json for training diversification."""
+    profiles_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_profiles.json")
+    try:
+        with open(profiles_path, "r", encoding="utf-8") as f:
+            profiles = json.load(f)
+        return list(profiles.values())
+    except Exception:
+        return []
+
+
+_PERSONA_POOL = _load_persona_pool()
+
+
 def train(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -669,6 +702,17 @@ def train(args):
                 max_dist = args.curriculum_start_dist + frac * (args.curriculum_end_dist - args.curriculum_start_dist)
                 curriculum_value = max_dist
             obs_np = env.reset(max_start_goal_dist=max_dist, start_coverage_ratio=coverage_ratio)
+            # Sample random persona each episode for generalization
+            if hasattr(env, "set_persona") and _PERSONA_POOL:
+                p = random.choice(_PERSONA_POOL)
+                env.set_persona(
+                    walk_speed_multiplier=p.get("walk_speed_multiplier", 1.0),
+                    panic_level=p.get("panic_level", 0.0),
+                    shelter_familiarity=p.get("shelter_familiarity", 0.5),
+                    compliance_rate=p.get("compliance_rate", 0.8),
+                    observation_error_multiplier=p.get("observation_error_multiplier", 1.0),
+                )
+                obs_np = env._obs()  # rebuild obs with fresh persona
             action_mask_np = env.get_action_mask()
             h = policy_net.init_hidden(device=device)
             done = False

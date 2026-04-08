@@ -4,6 +4,31 @@ from contextlib import contextmanager
 
 import config
 
+# ---------------------------------------------------------------------------
+# LLM-generated severity presets (loaded at import time if file exists)
+# File is produced by llm_scenario_generator.py
+# Falls back to hard-coded tables below if not found.
+# ---------------------------------------------------------------------------
+
+_LLM_PRESETS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "scenarios", "llm_severity_presets.json",
+)
+_LLM_SEVERITY_PRESETS: dict = {}
+
+def _load_llm_presets():
+    global _LLM_SEVERITY_PRESETS
+    if os.path.exists(_LLM_PRESETS_PATH):
+        try:
+            with open(_LLM_PRESETS_PATH, "r", encoding="utf-8") as f:
+                _LLM_SEVERITY_PRESETS = json.load(f)
+            print(f"[scenario_loader] loaded LLM severity presets from {_LLM_PRESETS_PATH}")
+        except Exception as e:
+            print(f"[scenario_loader] WARNING: could not load LLM presets ({e}), using defaults")
+            _LLM_SEVERITY_PRESETS = {}
+
+_load_llm_presets()
+
 
 DEFAULT_SCENARIO = {
     "name": "enterprise_baseline",
@@ -216,6 +241,12 @@ def _normalize_disaster_severity(raw):
 def _severity_overrides(disaster_type, severity):
     if severity is None:
         return {}
+    # Prefer LLM-generated presets if available
+    if _LLM_SEVERITY_PRESETS:
+        llm_table = _LLM_SEVERITY_PRESETS.get(disaster_type, {})
+        if severity in llm_table:
+            return dict(llm_table[severity])
+    # Fallback: hard-coded tables
     table = {
         "blizzard": BLIZZARD_SEVERITY_OVERRIDES,
         "earthquake": EARTHQUAKE_SEVERITY_OVERRIDES,

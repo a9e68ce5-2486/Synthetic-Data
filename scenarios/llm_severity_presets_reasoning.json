@@ -1,0 +1,20 @@
+{
+  "blizzard": {
+    "light": "For a light blizzard, I chose parameters that reflect minimal initial disruption and gradual accumulation of snow, with most roads remaining passable. The low EVAC_BLOCK_PROB and EVAC_BLOCK_INIT_PROB values ensure that road blockages are rare at the start, while the moderate EVAC_SNOW_MAX and high E",
+    "moderate": "For a moderate blizzard, I've chosen parameters that reflect notable disruption with some roads blocked or impaired, while allowing for progressive snow accumulation over time. The values are set to create a challenging evacuation scenario without immediate catastrophic damage.",
+    "severe": "For a severe blizzard, I've chosen parameters that reflect significant disruption to roads and pedestrian navigation, with progressive snow accumulation and increasing road blockages over time. The values are calibrated to represent heavy snowfall and reduced visibility, with a focus on impaired mob",
+    "extreme": "For an extreme blizzard, I prioritized progressive road degradation and high initial snow accumulation, with significant pedestrian disorientation and moderate vehicle observation noise. The chosen parameters reflect a severe, worsening situation with major disruptions to both pedestrian and vehicle"
+  },
+  "earthquake": {
+    "light": "For a light earthquake, I've chosen parameters that reflect minimal disruption and manageable evacuation, with a focus on immediate structural damage and moderate observation error. The values are set to represent a minor event with some road blockages and debris accumulation, but without significan",
+    "moderate": "For a moderate earthquake, I've chosen parameters that reflect immediate road blockages from structural damage and moderate ongoing disruption, with rubble accumulation and observation error affecting evacuation routes. The values are set to create notable disruption without overwhelming the evacuat",
+    "severe": "For a severe earthquake, I prioritized immediate road blockages due to structural collapse, with ongoing aftershock-induced disruptions. The chosen parameters reflect significant initial damage and progressive, albeit slow, debris accumulation.",
+    "extreme": "For an extreme earthquake, I prioritized high initial damage and continued degradation, with significant road blockages and moderate observation error due to fallen structures and debris. The chosen parameters reflect a severe and worsening disaster scenario, with major disruption to campus evacuati"
+  },
+  "compound": {
+    "light": "For a light compound disaster, I've chosen parameters that reflect minimal disruption with some initial damage and progressive snow accumulation, while ensuring that most roads remain passable and evacuation is manageable without major delays. The values are set to create a scenario with minor incon",
+    "moderate": "For a moderate compound disaster, I've chosen parameters that reflect a balance between the immediate damage from the earthquake and the progressive snow accumulation from the blizzard, with a focus on notable disruption and some roads blocked or impaired. The values are set to create a challenging ",
+    "severe": "I chose these values to reflect a severe compound disaster with significant initial damage from the earthquake and progressive snow accumulation from the blizzard, leading to high disruption and difficulty in evacuation. The parameters are calibrated to represent the compounding risks and challenges",
+    "extreme": "I chose high values for initial blockage and snow accumulation to reflect the extreme severity of the compound disaster, with significant ongoing degradation and high observation error to simulate the challenging conditions for evacuees."
+  }
+}
