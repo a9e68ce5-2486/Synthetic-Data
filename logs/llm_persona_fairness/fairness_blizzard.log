@@ -1,0 +1,4 @@
+usage: analyze_persona_fairness.py [-h] [--sweep-dir SWEEP_DIR]
+                                   [--sweep-dirs SWEEP_DIRS [SWEEP_DIRS ...]]
+                                   [--output-dir OUTPUT_DIR]
+analyze_persona_fairness.py: error: unrecognized arguments: --disaster blizzard

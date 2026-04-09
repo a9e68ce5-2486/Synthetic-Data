@@ -1,0 +1,8 @@
+Management Summary
+Scenario: enterprise_compound_light
+Baseline Policy: drqn
+
+For scenario 'enterprise_compound_light', best policy is 'drqn': reached rate improvement vs 'drqn' = 0.0%, exposure improvement = 0.0%, T95 not available.
+
+Policy Snapshot:
+- drqn: runs=20, avg_reached_rate=0.6245, avg_alive_rate=1.0, avg_exposure_total=76.3546, avg_t95_step=None

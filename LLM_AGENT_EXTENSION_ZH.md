@@ -370,13 +370,14 @@ assign_zone_to_shelter() # 輸出分配決策
 | 17 | Earthquake / Compound persona sweep + 三災害交叉比較 | ✅ 完成 |
 | 18 | End-to-end demo script `demo_pipeline.py` | ✅ 完成 |
 | 19 | Layer 2 評估：LLM coordinator vs 演算法分配對比（`eval_zone_coordinator.py`） | ✅ 完成 |
-| 20 | DRQN obs vector 加入 persona 欄位（重新訓練） | ⬜ 待做 |
+| 20 | DRQN obs vector 加入 persona 欄位（obs 37→42，重新訓練） | ✅ 完成 |
 | 21 | Personal Advisor API（FastAPI endpoint，`advisor_api.py`） | ✅ 完成 |
-| 22 | 整合三層 end-to-end pipeline | ⬜ 待做 |
+| 22 | 整合三層 end-to-end pipeline 量化實驗 | ⬜ 待做 |
 | 23 | 提升人數至 200 人（student×120, faculty×30, staff×40, visitor×10）| ✅ 完成 |
 | 24 | LLM 場景生成器（`llm_scenario_generator.py`）— 純文字描述生成災害參數 | ✅ 完成 |
 | 25 | 200人 × 原始參數三災害 sweep（blizzard/earthquake/compound）| ✅ 完成 |
-| 26 | 200人 × LLM 參數三災害 sweep | ⬜ 待做 |
+| 26 | 40人 × LLM 參數 persona-aware DRQN 三災害 sweep | ✅ 完成 |
+| 27 | Per-persona fairness analysis（LLM params，跨三災害）| ✅ 完成 |
 
 ### LLM 場景生成器（Step 24，2026-04-06）
 
@@ -653,3 +654,86 @@ visitor → visitor (35%), conference_attendee (30%), prospective_student_with_p
 | `agents/ped_agent.py` | step() 改為 `EVAC_SPEED_WALK * self.speed_multiplier` |
 | `config.py` | 新增 `EVAC_ROLE_WEIGHTS` 字典，取代原本 faculty/staff 二元分割 |
 | `batch_runner.py` | `_PERSONA_WEIGHTS` 更新為 4 個 role；`_build_agents()` 使用 role weights 隨機抽樣 |
+
+---
+
+## Step 20 完成：Persona-Aware DRQN（obs 37→42，2026-04-07）
+
+### 修改內容
+
+**`drqn_minimal.py`**：
+- `obs_dim = 12 + 5 * max_neighbors`（原為 `7 + 5k`）
+- 新增 `set_persona()` 方法：接收 6 個 persona 參數，計算有效值並儲存至 `_persona_features[5]`
+- `_obs()` 在 7 個 base features 之後附加 5 個 persona features
+- 訓練迴圈：每集隨機從 `agent_profiles.json` 抽樣一個 persona，呼叫 `env.set_persona()`
+
+**`batch_runner.py`**：
+- `obs_dim = 12 + 5 * max_neighbors`
+- `_obs(agent_id, node, target, final_goal, step, agent=None)` 接受 agent 參數
+- 有 agent 時附加 5 個 persona 特徵；無 agent 時（baselines）使用中性預設值
+
+### 訓練腳本
+
+**`finetune_progressive_severity_llm.sh`**：4 階段 LLM 參數訓練，從頭訓練（obs_dim 不相容）
+- 輸出：`logs/drqn_llm_persona/`（symlink 指向 stage4 best）
+- 每階段 400 episodes，共 1600 episodes
+
+---
+
+## Step 26、27 完成：40人 LLM Persona-Aware 三災害 Sweep（2026-04-07）
+
+### 設定
+
+- **Checkpoint**：`logs/drqn_llm_persona/drqn_torch_best.pt`（42-dim obs，persona-aware）
+- **人數**：40 人（標準 enterprise scenario）
+- **Persona**：20 種，依 role weights 分配
+- **Params**：LLM 生成（`scenarios/llm_severity_presets.json`）
+- **Runs**：20 runs/cell，共 12 cells（3 disasters × 4 severities）
+
+### 整體 Reached Rate
+
+| Disaster | light | moderate | severe | extreme |
+|----------|-------|----------|--------|---------|
+| blizzard   | 0.790 | 0.724 | 0.678 | 0.544 |
+| earthquake | 0.384 | 0.396 | 0.404 | **0.449** |
+| compound   | 0.625 | 0.374 | 0.363 | **0.417** |
+
+**Earthquake 非單調性**（LLM extreme block_init=0.80）：extreme 下 agent 只能走附近短路線，成功率反而回升。同現象在 compound 亦出現。
+
+### 跨災害 Fairness（extreme，最大 gap）
+
+| Disaster | 最強 persona | rate | 最弱 persona | rate | gap |
+|----------|------------|------|------------|------|-----|
+| earthquake | campus_security | 1.000 | mobility_impaired | 0.000 ⚠ | **1.000** |
+| compound | campus_security | 0.889 | conference_attendee | 0.125 | **0.764** |
+| blizzard | campus_security | 0.595 | research_scientist | 0.318 | **0.557** |
+
+### Role 比較（extreme）
+
+| Role | blizzard | earthquake | compound |
+|------|----------|------------|----------|
+| student | 0.522 | 0.334 | 0.308 |
+| faculty | 0.579 | 0.543 | 0.535 |
+| staff   | 0.557 | **0.796** | **0.718** |
+| visitor | 0.606 | **0.136** | **0.170** |
+
+**報告路徑**：`logs/llm_persona_fairness/`（blizzard/earthquake/compound + cross_disaster）
+
+---
+
+## 目前整體架構完成度（2026-04-07）
+
+| 層次 | 元件 | 狀態 |
+|------|------|------|
+| Layer 1 | LLM 行為建模（20 personas，Llama 3.3 70B via Groq） | ✅ 完成 |
+| Layer 1 | panic_level + obs_error + compliance + familiarity + delay 全部接入 | ✅ 完成 |
+| Layer 1 | DRQN obs vector 擴充（37→42 dim，persona 感知重訓） | ✅ 完成 |
+| Layer 2 | LLM Zone Coordinator（ReAct + 4 工具 + fallback） | ✅ 完成 |
+| Layer 2 | 評估腳本 `eval_zone_coordinator.py` | ✅ 完成 |
+| Layer 3 | DRQN 導航（persona-aware，42-dim obs） | ✅ 完成 |
+| 端對端 | Personal Advisor CLI + FastAPI | ✅ 完成 |
+| 端對端 | Demo pipeline（`demo_pipeline.py`） | ✅ 完成 |
+| 場景生成 | LLM 災害參數生成器（3 disasters × 4 severities） | ✅ 完成 |
+| 評估 | Per-persona fairness analysis（40人 + 200人，全三災害） | ✅ 完成 |
+| 評估 | 跨災害公平性比較（cross_disaster_fairness.md） | ✅ 完成 |
+| 評估 | End-to-end 整合量化實驗（Step 22） | ⬜ 待做 |

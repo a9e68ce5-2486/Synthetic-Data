@@ -4,14 +4,13 @@ set -euo pipefail
 PYTHON_BIN="${PYTHON_BIN:-venv/bin/python}"
 SCENARIO="${1:-scenarios/enterprise_blizzard.json}"
 OUT_DIR="${2:-logs/disaster_severity_sweep}"
-# Default checkpoint: prefer progressive-severity model, fall back to domain-rand,
-# then blocked finetune.  Override by passing a 3rd argument.
-if [ -f "logs/drqn_progressive_severity/drqn_torch_best.pt" ]; then
-  DEFAULT_CKPT="logs/drqn_progressive_severity/drqn_torch_best.pt"
-elif [ -f "logs/drqn_domain_rand/drqn_torch_best.pt" ]; then
-  DEFAULT_CKPT="logs/drqn_domain_rand/drqn_torch_best.pt"
+# Default checkpoint: persona-aware model trained with LLM severity params (obs_dim=42)
+if [ -f "logs/drqn_llm_persona/drqn_torch_best.pt" ]; then
+  DEFAULT_CKPT="logs/drqn_llm_persona/drqn_torch_best.pt"
+elif [ -f "logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt" ]; then
+  DEFAULT_CKPT="logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt"
 else
-  DEFAULT_CKPT="logs/drqn_blocked_finetune/drqn_torch_best.pt"
+  DEFAULT_CKPT="logs/drqn_progressive_severity/drqn_torch_best.pt"
 fi
 CHECKPOINT="${3:-${DEFAULT_CKPT}}"
 

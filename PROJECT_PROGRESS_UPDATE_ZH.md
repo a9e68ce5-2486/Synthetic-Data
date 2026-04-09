@@ -1867,3 +1867,148 @@ visitor 從 1.25 → 2.5 人/persona，仍需 ⚠ 標記但趨勢比 100 人版�
 | Fairness gap (blizzard) | 0.721 | 0.708 | 縮小但仍顯著 |
 
 **結論**：200人版整體結果與 100人版高度一致（±3%），驗證模型穩健性。差異主要來自 visitor 族群樣本量增加帶來的統計修正。
+
+---
+
+## 十七、LLM Persona 感知 DRQN 訓練與三災害 Sweep（2026-04-07）
+
+### 1. 背景：統一切換至 40 人、LLM 生成參數
+
+為了與論文基準統一，本階段決定：
+
+- **人數固定為 40 人**（DRQN 訓練與所有 sweep）
+- **使用 LLM 生成的災害強度參數**（`scenarios/llm_severity_presets.json`）
+- **obs_dim 從 37 擴充至 42**（新增 5 個 persona 特徵維度）
+- **從頭訓練**（舊 37-dim checkpoint 無法直接載入 42-dim 網路）
+
+### 2. obs_dim 擴充：37 → 42
+
+#### 新增的 5 個 persona 特徵
+
+| 索引 | 特徵 | 說明 |
+|------|------|------|
+| [7] | `walk_speed_multiplier`（正規化至 [0, 1]） | 行走速度比例（除以 1.5） |
+| [8] | `panic_level` | 恐慌程度 |
+| [9] | `shelter_familiarity` | 對避難所位置的熟悉度 |
+| [10] | `eff_compliance` | 有效遵從率（`compliance × (1−0.5×panic)`） |
+| [11] | `eff_obs_error` | 有效觀察誤差（`obs_error × (1+panic) / 3.0`，clip to [0,1]） |
+
+obs 向量結構：`[7 base] + [5 persona] + [5 neighbors × 6 features] = 42 dims`
+
+#### 修改的檔案
+
+| 檔案 | 修改內容 |
+|------|---------|
+| `drqn_minimal.py` | `obs_dim = 12 + 5 × max_neighbors`；新增 `set_persona()` 方法；訓練迴圈加入每集隨機 persona 抽樣 |
+| `batch_runner.py` | `obs_dim = 12 + 5 × max_neighbors`；`_obs()` 讀取 agent 的 persona 特徵（或預設中性值） |
+
+### 3. 訓練流程：4 階段漸進式嚴重度訓練
+
+**腳本**：`finetune_progressive_severity_llm.sh`  
+**輸出**：`logs/drqn_llm_persona/`
+
+| 階段 | 嚴重度 | block_init | threshold | snow_prob | eps_start |
+|------|--------|-----------|-----------|-----------|-----------|
+| 1 | light    | 0.00 | 0.80 | 0.010 | 0.60 |
+| 2 | moderate | 0.01 | 0.40 | 0.020 | 0.40 |
+| 3 | severe   | 0.01 | 0.60 | 0.030 | 0.35 |
+| 4 | extreme  | 0.05 | 0.40 | 0.030 | 0.30 |
+
+每個階段 400 episodes，從前一階段 best checkpoint 繼續，最終 symlink 至 `logs/drqn_llm_persona/drqn_torch_best.pt`。
+
+**LLM 參數與原始硬編碼的關鍵差異**：
+- threshold 在 moderate/extreme 更低（0.40 vs 0.82），道路更快封閉
+- snow_prob 更高（0.030 vs 0.007），積雪轉封路更快
+- 代表 LLM 對暴風雪的封路速度估計比原始更悲觀（更接近真實）
+
+### 4. 三災害 × 四嚴重度 Sweep 結果（40 人，LLM persona-aware DRQN）
+
+**設定**：`logs/drqn_llm_persona/drqn_torch_best.pt`，40 人，20-persona，20 runs/cell
+
+#### 整體 reached_rate
+
+| Disaster | light | moderate | severe | extreme |
+|----------|-------|----------|--------|---------|
+| blizzard   | 0.790 | 0.724 | 0.678 | 0.544 |
+| earthquake | 0.384 | 0.396 | 0.404 | **0.449** |
+| compound   | 0.625 | 0.374 | 0.363 | **0.417** |
+
+#### 平均 exposure_total
+
+| Disaster | light | moderate | severe | extreme |
+|----------|-------|----------|--------|---------|
+| blizzard   | 31.3 | 70.7 | 84.4 | 72.5 |
+| earthquake | 112.9 | 72.7 | 62.1 | 27.3 |
+| compound   | 76.4 | 65.5 | 63.7 | 37.7 |
+
+#### Faculty vs Staff reached_rate
+
+| Disaster | Severity | faculty | staff |
+|----------|----------|---------|-------|
+| blizzard | extreme | 0.579 | 0.558 |
+| earthquake | extreme | 0.543 | 0.796 |
+| compound | extreme | 0.535 | 0.718 |
+
+### 5. 關鍵發現：Earthquake 非單調性
+
+**Earthquake 在 extreme 下 reached_rate 反而高於 severe（0.449 > 0.404）**
+
+根因分析：
+- LLM 生成的 earthquake extreme 參數為 `block_init_prob = 0.80`（vs severe = 0.45）
+- 初始封路率 80% 導致幾乎所有長路線在起始時就被切斷
+- 可達的 agent 只剩附近有 shelter 的短路線
+- 這些短路線成功率高 + exposure 極低（27.3，為所有 12 組中最低）
+- 不可達的 agent 被 reachable-only spawn 排除，實際計算分母變小
+
+**結論**：這不是 DRQN 改善，而是 LLM 生成的 extreme 封路強度使環境發生結構性變化。Compound 出現相同現象（0.363 → 0.417）。
+
+### 6. Per-Persona Fairness Analysis（extreme，跨三災害）
+
+**報告路徑**：`logs/llm_persona_fairness/`
+
+#### 跨災害 reached_rate（extreme，按弱勢程度排序）
+
+| Persona | Role | blizzard | earthquake | compound | 最脆弱災害 |
+|---------|------|----------|------------|----------|-----------|
+| conference_attendee | visitor | 0.389 | 0.167 | **0.125** | compound |
+| freshman_student | student | 0.428 | 0.209 | 0.167 | compound |
+| part_time_student | student | 0.396 | 0.181 | 0.270 | earthquake |
+| visitor | visitor | 0.513 | 0.208 | 0.178 | compound |
+| international_student | student | 0.515 | 0.194 | 0.249 | earthquake |
+| mobility_impaired | visitor | 0.875 | **0.000** ⚠ | 0.167 | earthquake |
+| campus_security | staff | 0.595 | **1.000** | 0.889 | blizzard |
+| facilities_staff | staff | 0.560 | 0.911 | 0.818 | blizzard |
+
+> ⚠ `mobility_impaired` 在 earthquake extreme 下 reached_rate = 0.000：speed=0.30 + panic modulation + 初始封路 80% 完全切斷所有可走路線。
+
+#### Role 比較（extreme）
+
+| Role | blizzard | earthquake | compound |
+|------|----------|------------|----------|
+| student | 0.522 | 0.334 | 0.308 |
+| faculty | 0.579 | 0.543 | 0.535 |
+| staff   | 0.557 | **0.796** | **0.718** |
+| visitor | 0.606 | **0.136** | **0.170** |
+
+#### 最大 Fairness Gap（extreme）
+
+| Disaster | 最高 persona | rate | 最低 persona | rate | gap |
+|----------|------------|------|------------|------|-----|
+| earthquake | campus_security | 1.000 | mobility_impaired | 0.000 | **1.000** |
+| compound | campus_security | 0.889 | conference_attendee | 0.125 | **0.764** |
+| blizzard | campus_security | 0.595 | research_scientist | 0.318 | **0.557** |
+
+**關鍵觀察**：
+- **Staff 在 earthquake/compound 下優於 blizzard**：campus_security/facilities_staff 的 obs_error=0.50 + familiarity=1.0 讓他們在高封路環境下仍能找到替代路線
+- **Visitor 在 earthquake/compound 極度脆弱**：從 blizzard 的 0.606 崩至 earthquake 的 0.136（降幅 −78%）
+- **Blizzard 下 fairness gap 最小**（0.557 vs 0.764/1.000）：積雪漸進封路比初始大規模封路更平等地影響所有 persona
+
+### 7. 與 200 人版結果對比
+
+| 設定 | Blizzard extreme | Earthquake extreme | Compound extreme |
+|------|----------------|-------------------|-----------------|
+| 200人（5-16節） | 0.591 | 0.405 | 0.430 |
+| 40人 LLM params（本節） | 0.544 | 0.449 | 0.417 |
+| 差異說明 | LLM params 封路更嚴，blizzard 更難 | LLM extreme block_init=0.80，非單調效應 | 複合效應相互抵消 |
+
+**結論**：兩組設定下 earthquake 均出現非單調性，驗證此為 LLM 生成 extreme 參數的系統性特徵，而非隨機誤差。
