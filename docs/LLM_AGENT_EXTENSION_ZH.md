@@ -279,6 +279,23 @@ LLM 接收自然語言環境反饋（成功偵測器、場景描述、人工修�
 | Layer 2 | LLM Zone Coordinator (ReAct) | 語意驅動的 zone-level shelter 分配 |
 | Layer 3 | DRQN on OSM graph | 部分觀察環境下的個體逐步導航 |
 
+**Layer 2 實驗結果（blizzard moderate，5 seeds，live Groq API）**：
+
+| Config | 描述 | Reached Rate | Avg Exposure |
+|--------|------|-------------|--------------|
+| B | Algo zone + persona DRQN (Layer 1+3) | 0.713 | 71.6 |
+| C | LLM zone + persona DRQN (Layer 1+2+3) | 0.691 | 262.0 |
+
+Per-role breakdown：
+
+| Role | Config B | Config C |
+|------|---------|---------|
+| Staff | 0.769 | **0.983** |
+| Faculty | 0.733 | **0.950** |
+| Student | 0.000 | **0.950** |
+
+**關鍵發現**：Layer 2 的 LLM zone coordinator 整體 reached_rate 下降 2.2%，但公平性大幅提升。演算法分配完全忽視 student（reached = 0.000），而 LLM 透過語意推理將各 role 均衡分配至適合的 shelter，三組皆達 95% 以上。代價是 exposure 上升（LLM 傾向把人引導至較遠但低壅塞的 shelter）。Layer 2 的核心貢獻是 **role-level equity**，而非整體吞吐量最大化。
+
 **Related work 定位**：
 
 - 相較於 Dang et al. (2025)：同樣用 LLM 做 evacuation behavior modeling，但加入了 graph-based DRQN navigation 和 zone-level coordination

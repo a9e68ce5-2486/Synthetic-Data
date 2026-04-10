@@ -121,12 +121,22 @@ Earthquake produces large staff/visitor asymmetry: staff navigate effectively ev
 Most vulnerable: research_scientist (0.318), conference_attendee (0.389), part_time_student (0.396).  
 Fairness gap: **0.557** at blizzard extreme, up to **1.000** at earthquake extreme (campus_security: 1.000 vs mobility_impaired: 0.000).
 
-### Three-Layer Pipeline Integration
+### Three-Layer Pipeline Integration (blizzard moderate, 5 seeds)
 
-| Config | Description | Reached Rate |
-|--------|-------------|-------------|
-| B | Persona-aware DRQN + algo zone (Layer 1+3) | 0.713 |
-| C | Persona-aware DRQN + LLM zone (Layer 1+2+3) | requires API key |
+| Config | Description | Reached Rate | Avg Exposure |
+|--------|-------------|-------------|--------------|
+| B | Algo zone + persona DRQN (Layer 1+3) | 0.713 | 71.6 |
+| C | LLM zone + persona DRQN (Layer 1+2+3) | 0.691 | 262.0 |
+
+Per-role breakdown reveals the key difference:
+
+| Role | Config B (algo zone) | Config C (LLM zone) |
+|------|---------------------|---------------------|
+| Staff   | 0.769 | **0.983** |
+| Faculty | 0.733 | **0.950** |
+| Student | 0.000 | **0.950** |
+
+Layer 2 (LLM zone coordinator) trades 2.2% overall throughput for a dramatic fairness improvement: the algorithmic assignment leaves students completely unserved (0.000), while the LLM balances all roles above 95%. The higher exposure reflects the LLM routing agents to further but less congested shelters. Layer 2's value is **role-level equity**, not raw throughput.
 
 ---
 
