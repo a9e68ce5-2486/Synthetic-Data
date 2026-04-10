@@ -23,13 +23,29 @@ Under Dynamic Disaster Conditions}\\[0.4em]
 \maketitle
 
 \onehalfspacing
- 
+
+% ─────────────────────────────────────────────
+\begin{abstract}
+Campus evacuation under dynamic disaster conditions requires policies that adapt to heterogeneous populations and degrading infrastructure. This work presents a three-layer decision-support system combining LLM-based behavioral profiling (Layer 1), zone-level coordination (Layer 2), and a persona-aware Deep Recurrent Q-Network (Layer 3) trained on LLM-calibrated disaster parameters. We evaluate the system on the University of Utah road network across three disaster types (blizzard, earthquake, compound) and four severity levels. The persona-aware DRQN achieves reached rates up to 0.79 under light blizzard and maintains above 0.54 under extreme conditions, substantially outperforming heuristic baselines. A cross-disaster fairness analysis across 20 persona types reveals equity gaps of up to 1.0 under earthquake extreme, with visitors and low-familiarity personas being most vulnerable. These results motivate future fairness-constrained policy training.
+\end{abstract}
+
 % ─────────────────────────────────────────────
 \section{Introduction and Motivation}
 
 Campus mass evacuation under dynamic disaster conditions presents a challenging planning problem: the road network degrades in real time, individual evacuees have heterogeneous mobility and behavioral characteristics, and no single agent has access to the full global state. Standard heuristic policies such as nearest-shelter routing are distance-aware but fail to adapt to mid-evacuation route failures~\cite{chen2018}, while prior RL-based approaches~\cite{mnih2015} typically assume a homogeneous agent population.
 
 This project designs and evaluates a three-layer decision-support system for campus evacuation on the University of Utah road network. The system combines LLM-based behavioral profiling, zone-level coordination, and a persona-aware DRQN navigation policy trained on LLM-calibrated disaster parameters. The central question is whether integrating population heterogeneity into both simulation design and policy training leads to more robust and equitable evacuation outcomes.
+
+% ─────────────────────────────────────────────
+\section{Related Work}
+
+\textbf{Evacuation planning and simulation.} Chen et al.~\cite{chen2018} optimize evacuation routes under hazard scenarios using a hybrid simulation-optimization approach, but assume homogeneous agent populations. Agent-based models such as NetLogo-based crowd simulations capture heterogeneity at the pedestrian level but typically rely on hand-crafted behavioral rules rather than learned policies.
+
+\textbf{Deep reinforcement learning for navigation.} Mnih et al.~\cite{mnih2015} demonstrate that deep Q-networks (DQN) can learn human-level navigation policies from raw state input. Hausknecht and Stone~\cite{hausknecht2015} extend DQN with a recurrent memory layer (DRQN) to handle partial observability, making it applicable to graph navigation where agents cannot observe the full network state. Wang et al.~\cite{wang2016} introduce Dueling DQN, which separately estimates state value and action advantages, improving sample efficiency in sparse-reward settings.
+
+\textbf{LLM-augmented simulation and planning.} Large language models have been applied to generate diverse NPC behaviors in social simulations~\cite{meta2024llama3}. The ReAct framework~\cite{yao2023react} extends LLM reasoning with interleaved action execution, which we adapt for zone-level disaster coordination. To our knowledge, no prior work integrates LLM-generated behavioral profiles and scenario parameters directly into the training distribution of an RL navigation agent.
+
+\textbf{Curriculum learning.} Bengio et al.~\cite{bengio2009curriculum} show that training on progressively harder examples improves generalization. We apply curriculum learning across four severity levels, which empirically stabilizes training and improves performance under extreme conditions compared to direct full-severity training.
 
 % ─────────────────────────────────────────────
 \section{System Architecture}
@@ -150,7 +166,7 @@ Table~\ref{tab:baseline_vs_drqn} compares heuristic policies and DRQN under bliz
 
 \begin{table}[h]
 \centering
-\caption{Reached rate comparison: baselines vs.\ DRQN under blizzard (40 agents, 20 runs).}
+\caption{Reached rate comparison: baselines vs.\ DRQN under blizzard (40 agents, 20 runs). ``DRQN (prev.)'' refers to the pre-persona checkpoint (\texttt{drqn\_progressive\_severity\_v3\_extreme}), trained with a 37-dim observation vector lacking persona features; included as an upper-bound reference for the learned-policy family.}
 \label{tab:baseline_vs_drqn}
 \begin{tabular}{lcccc}
 \toprule
@@ -169,7 +185,7 @@ DRQN outperforms both heuristics by a large margin under baseline conditions (+2
 
 \subsection{DRQN Across All Disaster Types and Severities}
 
-Table~\ref{tab:sweep} summarizes DRQN performance across all 12 scenario conditions using the 200-agent population.
+Table~\ref{tab:sweep} summarizes DRQN performance across all 12 scenario conditions (40 agents, 20 runs per condition, LLM-calibrated parameters).
 
 \begin{table}[h]
 \centering
@@ -214,24 +230,24 @@ A key contribution of this work is the analysis of evacuation equity across the 
 \toprule
 \textbf{Severity} & \textbf{Student} & \textbf{Faculty} & \textbf{Staff} & \textbf{Visitor} \\
 \midrule
-Light    & 0.751 & 0.829 & 0.847 & 0.672 \\
-Moderate & 0.684 & 0.760 & 0.831 & 0.544 \\
-Severe   & 0.598 & 0.668 & 0.705 & 0.477 \\
-Extreme  & 0.553 & 0.666 & 0.713 & 0.410 \\
+Light    & 0.766 & 0.812 & 0.876 & 0.672 \\
+Moderate & 0.712 & 0.738 & 0.776 & 0.606 \\
+Severe   & 0.698 & 0.671 & 0.627 & 0.672 \\
+Extreme  & 0.522 & 0.579 & 0.558 & 0.606 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Staff consistently achieves the highest reached rate due to high campus familiarity, high compliance, and low panic. Visitors are the most vulnerable group across all conditions, with the gap widening under severe and extreme scenarios.
+Under light and moderate conditions, staff achieves the highest reached rate due to high campus familiarity, high compliance, and low panic. However, the role ordering shifts at severe and extreme severity: staff rates decline faster than student rates, likely because the curriculum-trained policy was not exposed to enough staff-specific extreme scenarios. The visitor role shows high reached rates at severe and extreme conditions, but this is an artifact of small sample sizes (1--2 visitor agents per run); statistical confidence is low for these estimates, as noted in the limitations.
 
-At the persona level, the fairness gap at extreme blizzard severity is 0.708 (campus\_security: 0.833 vs.\ conference\_attendee: 0.125). The five most vulnerable personas at extreme severity are:
+At the persona level, the fairness gap at extreme blizzard severity is 0.557 (mobility\_impaired: 0.875 vs.\ research\_scientist: 0.318). The mobility\_impaired value is high here due to small sample sizes (visitor-class personas average 1--2 agents per run, flagged with confidence warnings in the output). The five most vulnerable personas at extreme severity are:
 
 \begin{enumerate}
-  \item \textbf{conference\_attendee} (visitor): 0.125 -- low familiarity, high observation error
-  \item \textbf{prospective\_student\_with\_parent} (visitor): 0.250 -- low familiarity, moderate panic
-  \item \textbf{student\_with\_anxiety} (student): 0.384 -- panic-induced compliance collapse
-  \item \textbf{adjunct\_instructor} (faculty): 0.420 -- low familiarity vs.\ senior faculty
-  \item \textbf{mobility\_impaired} (visitor): 0.429 -- speed bottleneck under severe conditions
+  \item \textbf{research\_scientist} (faculty): 0.318 -- moderate campus familiarity but elevated observation error and lower compliance under panic
+  \item \textbf{conference\_attendee} (visitor): 0.389 -- low familiarity, high observation error
+  \item \textbf{part\_time\_student} (student): 0.396 -- lower compliance and reduced familiarity compared to full-time students
+  \item \textbf{freshman\_student} (student): 0.428 -- high panic level combined with limited campus experience
+  \item \textbf{student\_with\_anxiety} (student): 0.439 -- panic-induced compliance collapse
 \end{enumerate}
 
 These results show that panic-level modulation ($\text{eff\_compliance} = \text{compliance} \times (1 - 0.5 \times \text{panic})$) is the primary driver of poor performance in anxiety-prone personas, while low shelter familiarity dominates for visitor-type agents unfamiliar with the campus layout.
@@ -293,7 +309,7 @@ The project is implemented in Python and consists of the following components:
 % ─────────────────────────────────────────────
 \section{Conclusion}
 
-This project demonstrates that integrating LLM-based behavioral heterogeneity into both the simulation design and policy training pipeline leads to measurable improvements in evacuation outcome analysis. The persona-aware DRQN substantially outperforms heuristic baselines across all disaster conditions, achieving reached rates of 0.79 under light blizzard and maintaining above 0.54 under extreme conditions -- compared to near-zero performance for both heuristic policies. The fairness analysis reveals significant equity gaps between population groups (gap of 0.708 at extreme blizzard severity), motivating future work on fairness-constrained policy training that explicitly accounts for vulnerable persona characteristics.
+This project demonstrates that integrating LLM-based behavioral heterogeneity into both the simulation design and policy training pipeline leads to measurable improvements in evacuation outcome analysis. The persona-aware DRQN substantially outperforms heuristic baselines across all disaster conditions, achieving reached rates of 0.79 under light blizzard and maintaining above 0.54 under extreme conditions -- compared to near-zero performance for both heuristic policies. The fairness analysis reveals significant equity gaps between population groups (gap of 0.557 at extreme blizzard, up to 1.000 at earthquake extreme), motivating future work on fairness-constrained policy training that explicitly accounts for vulnerable persona characteristics.
 
 % ─────────────────────────────────────────────
 \begin{thebibliography}{9}

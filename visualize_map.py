@@ -37,9 +37,13 @@ import random
 import folium
 from folium.plugins import AntPath, MeasureControl, MiniMap
 
+import pyproj
+
 import config
 from evac_env import EvacEnv
 from scenario_loader import load_scenario, temporary_config, _apply_disaster_rules
+
+_TO_LATLON = pyproj.Transformer.from_crs("EPSG:32612", "EPSG:4326", always_xy=True)
 
 # ---------------------------------------------------------------------------
 # Color palette per persona
@@ -87,11 +91,12 @@ ROLE_COLORS = {
 # ---------------------------------------------------------------------------
 
 def _node_latlon(env, node):
-    """Return (lat, lon) for a node. OSM pos is stored as (x=lon, y=lat)."""
+    """Return (lat, lon) for a node. pos is stored as UTM EPSG:32612 (x=easting, y=northing)."""
     if node not in env.pos:
         return None
     x, y = env.pos[node]
-    return (y, x)  # folium uses (lat, lon)
+    lon, lat = _TO_LATLON.transform(x, y)
+    return (lat, lon)  # folium uses (lat, lon)
 
 
 def _edge_latlon(env, u, v):
@@ -104,8 +109,9 @@ def _edge_latlon(env, u, v):
 
 def _base_map(env):
     """Create a base folium map centered on the campus."""
-    lats = [y for x, y in env.pos.values()]
-    lons = [x for x, y in env.pos.values()]
+    latlon_vals = [_TO_LATLON.transform(x, y) for x, y in env.pos.values()]
+    lats = [lat for lon, lat in latlon_vals]
+    lons = [lon for lon, lat in latlon_vals]
     center = (sum(lats) / len(lats), sum(lons) / len(lons))
     m = folium.Map(location=center, zoom_start=16, tiles="CartoDB positron")
     MiniMap(toggle_display=True).add_to(m)
@@ -226,8 +232,9 @@ def visualize_route(env, route_data, profile, output_path):
 
 
 def _base_map_center(env):
-    lats = [y for x, y in env.pos.values()]
-    lons = [x for x, y in env.pos.values()]
+    latlon_vals = [_TO_LATLON.transform(x, y) for x, y in env.pos.values()]
+    lats = [lat for lon, lat in latlon_vals]
+    lons = [lon for lon, lat in latlon_vals]
     return (sum(lats) / len(lats), sum(lons) / len(lons))
 
 

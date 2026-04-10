@@ -378,6 +378,8 @@ assign_zone_to_shelter() # 輸出分配決策
 | 25 | 200人 × 原始參數三災害 sweep（blizzard/earthquake/compound）| ✅ 完成 |
 | 26 | 40人 × LLM 參數 persona-aware DRQN 三災害 sweep | ✅ 完成 |
 | 27 | Per-persona fairness analysis（LLM params，跨三災害）| ✅ 完成 |
+| 28 | Gradio Web UI（`advisor_ui.py`）— 瀏覽器介面，campus 地點選單 + folium 路線圖 + LLM 建議 | ✅ 完成 |
+| 29 | 論文（`paper/capstone_final.tex`）— Abstract、Related Work、資料一致性修正、DRQN (prev.) 說明 | ✅ 完成 |
 
 ### LLM 場景生成器（Step 24，2026-04-06）
 
@@ -721,7 +723,7 @@ visitor → visitor (35%), conference_attendee (30%), prospective_student_with_p
 
 ---
 
-## 目前整體架構完成度（2026-04-07）
+## 最終整體架構完成度（2026-04-09）
 
 | 層次 | 元件 | 狀態 |
 |------|------|------|
@@ -731,12 +733,17 @@ visitor → visitor (35%), conference_attendee (30%), prospective_student_with_p
 | Layer 2 | LLM Zone Coordinator（ReAct + 4 工具 + fallback） | ✅ 完成 |
 | Layer 2 | 評估腳本 `eval_zone_coordinator.py` | ✅ 完成 |
 | Layer 3 | DRQN 導航（persona-aware，42-dim obs） | ✅ 完成 |
-| 端對端 | Personal Advisor CLI + FastAPI | ✅ 完成 |
+| 端對端 | Personal Advisor CLI（`personal_advisor.py`） | ✅ 完成 |
+| 端對端 | Personal Advisor FastAPI（`advisor_api.py`） | ✅ 完成 |
+| 端對端 | Gradio Web UI（`advisor_ui.py`，folium 路線圖 + campus 地點選單） | ✅ 完成 |
 | 端對端 | Demo pipeline（`demo_pipeline.py`） | ✅ 完成 |
-| 場景生成 | LLM 災害參數生成器（3 disasters × 4 severities） | ✅ 完成 |
-| 評估 | Per-persona fairness analysis（40人 + 200人，全三災害） | ✅ 完成 |
-| 評估 | 跨災害公平性比較（cross_disaster_fairness.md） | ✅ 完成 |
-| 評估 | End-to-end 整合量化實驗（Step 22）| ✅ 離線版完成（Layer 2 offline = algo fallback） |
+| 視覺化 | 即時動畫模擬（`evacuation_main.py`，matplotlib，agent + 積雪/封路疊加） | ✅ 完成 |
+| 視覺化 | folium 靜態地圖（`visualize_map.py`，route/simulation 兩模式） | ✅ 完成 |
+| 場景生成 | LLM 災害參數生成器（`llm_scenario_generator.py`，3 disasters × 4 severities） | ✅ 完成 |
+| 評估 | Per-persona fairness analysis（40人 LLM params，全三災害） | ✅ 完成 |
+| 評估 | 跨災害公平性比較（blizzard/earthquake/compound，extreme severity） | ✅ 完成 |
+| 評估 | End-to-end 整合量化實驗（`eval_pipeline_integration.py`，offline） | ✅ 完成 |
+| 論文 | `paper/capstone_final.tex`（Abstract、Related Work、資料一致性、fairness 分析） | ✅ 完成 |
 
 ---
 

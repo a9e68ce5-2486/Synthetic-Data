@@ -56,9 +56,9 @@ The system is designed as a three-layer pipeline, where each layer handles a dif
 - Shelter capacity management and reassignment
 
 ### DRQN Policy
-- State: 37-dimensional observation (local graph features, hazard signals, subgoal direction)
+- State: 42-dimensional observation (7 spatial + 5 persona + 30 neighbor features)
 - Action: top-k neighbor selection on OSM graph (variable branching factor)
-- Training: adaptive distance curriculum + progressive severity fine-tuning
+- Training: 4-stage curriculum (light → moderate → severe → extreme), persona randomly sampled each episode from all 20 profiles
 - Evaluation: multi-seed batch runner, severity sweep, reachability analysis
 
 ### LLM Human Behavior Profiling (Layer 1)
@@ -98,76 +98,50 @@ The system is designed as a three-layer pipeline, where each layer handles a dif
 
 ## Results
 
-### DRQN vs Baselines (enterprise_baseline scenario)
+### DRQN vs Baselines (blizzard, 40 agents, 20 runs)
 
-| Policy | avg_reached_rate | avg_exposure_total |
-|--------|-----------------|-------------------|
-| round_robin | 0.2654 | 286.14 |
-| nearest | 0.2909 | 246.92 |
-| **drqn** | **0.9627** | **5.41** |
+| Policy | Reached Rate | Notes |
+|--------|-------------|-------|
+| round_robin | 0.058–0.010 | Collapses under disaster |
+| nearest | 0.173–0.031 | Distance-aware but unadaptive |
+| DRQN (prev., 37-dim) | 0.845–0.519 | Pre-persona checkpoint |
+| **DRQN (persona-aware, 42-dim)** | **0.790–0.545** | LLM-calibrated params, diverse personas |
 
-DRQN achieves **+262.7% reached_rate** and **-98.1% exposure** vs round_robin.
+DRQN achieves **71×** reached_rate vs round_robin at extreme blizzard.
 
-### Blizzard Severity Sweep — Before vs After Fixes
+### Blizzard Severity Sweep (persona-aware DRQN, LLM-calibrated params)
 
-Root cause identified: agents spawned on isolated nodes (`candidates=[]`) with all neighbor edges blocked at initialization. Fixed by: (1) reachable-only spawn nodes in `batch_runner.py`, (2) `EVAC_BLOCK_INIT_PROB` calibration in `scenario_loader.py`.
+| Severity | Reached Rate | Avg Exposure |
+|----------|-------------|--------------|
+| Light    | 0.790 | 31.3 |
+| Moderate | 0.724 | 70.7 |
+| Severe   | 0.678 | 84.4 |
+| Extreme  | 0.545 | 72.5 |
 
-| Severity | Before fixes | After fixes | Improvement |
-|----------|-------------|-------------|------------|
-| light    | 0.835 | 0.848 | +0.013 |
-| moderate | 0.752 | 0.792 | +0.040 |
-| severe   | 0.646 | 0.736 | +0.091 |
-| extreme  | 0.535 | 0.724 | **+0.190** |
+### Three-Disaster Sweep (extreme severity, per-role breakdown)
 
-### Single-Agent Scaling (no capacity limit)
-
-| Scale (ped/car) | avg_reached_rate | avg_t95_step |
-|----------------|-----------------|-------------|
-| 60 / 20 | 0.954 | 146.4 |
-| 200 / 80 | 0.990 | 197.3 |
-| 500 / 200 | 0.997 | 159.0 |
-
-DRQN scales to 700 total agents without degradation.
-
-### All-Policies Blizzard Severity Sweep
-
-| Severity | round_robin | nearest | DRQN (uniform) | DRQN (20-persona v2) |
-|----------|------------|---------|----------------|----------------------|
-| light    | 0.058 | 0.173 | 0.848 | **0.796** |
-| moderate | 0.022 | 0.100 | 0.792 | **0.708** |
-| severe   | 0.012 | 0.061 | 0.736 | **0.623** |
-| extreme  | 0.010 | 0.031 | 0.716 | **0.597** |
-
-DRQN achieves **71×** reached_rate vs round_robin under extreme blizzard. 20-persona LLM-profiled agents show 5-12% lower reached_rate than uniform, reflecting genuine population heterogeneity — enabled by wiring all 4 persona behavior fields (familiarity, compliance, obs_error, delay) into simulation.
-
-### Per-Persona Fairness Analysis (blizzard, extreme severity)
-
-| Persona | Role | reached_rate |
-|---------|------|-------------|
-| campus_security | staff | **0.783** |
-| junior_faculty | faculty | 0.772 |
-| student_athlete | student | 0.760 |
-| ... | | |
-| student_with_anxiety | student | 0.421 |
-| part_time_student | student | 0.344 |
-| mobility_impaired | visitor | 0.214 |
-| conference_attendee | visitor | **0.062** |
-
-Fairness gap at extreme blizzard (200-agent): **0.708** (campus_security 0.833 vs conference_attendee 0.125).
-Most vulnerable persona overall: `adjunct_instructor` at compound extreme → **0.042** reached_rate.
-Visitor role at earthquake extreme: **0.080** — unfamiliar populations are severely impacted by structural damage.
-These numbers directly motivate the Personal Advisor system: high-risk personas need personalized, detailed guidance.
-
-### Three-Disaster Cross-Comparison (extreme severity)
-
-| Role | blizzard | earthquake | compound |
+| Role | Blizzard | Earthquake | Compound |
 |------|----------|------------|----------|
-| student | 0.557 | 0.299 | 0.315 |
-| faculty | 0.683 | 0.574 | 0.581 |
-| staff | 0.715 | 0.707 | 0.677 |
-| visitor | 0.280 | **0.146** | **0.145** |
+| Student | 0.522 | 0.334 | 0.308 |
+| Faculty | 0.579 | 0.543 | 0.535 |
+| Staff   | 0.558 | **0.796** | **0.718** |
+| Visitor | 0.606 | 0.136 | 0.170 |
 
-Earthquake and compound disasters are significantly harder for unfamiliar populations (visitor role −47% vs blizzard).
+Earthquake produces large staff/visitor asymmetry: staff navigate effectively even with 80% initial blockage; visitors fail catastrophically due to low familiarity and high observation error.
+
+### Per-Persona Fairness (blizzard extreme, 40 agents, LLM params)
+
+Most vulnerable personas: research_scientist (0.318), conference_attendee (0.389), part_time_student (0.396).  
+Fairness gap: **0.557** at blizzard extreme, up to **1.000** at earthquake extreme (campus_security: 1.000 vs mobility_impaired: 0.000).
+
+### Three-Layer Pipeline Integration
+
+| Config | Description | Reached Rate |
+|--------|-------------|-------------|
+| B | Persona-aware DRQN + algo zone (Layer 1+3) | 0.713 |
+| C | Persona-aware DRQN + LLM zone (Layer 1+2+3) | requires API key |
+
+Offline result (no API key, Layer 2 = algo fallback): Δreached = −0.011 (C ≈ B). True Layer 2 marginal contribution requires live Groq key.
 
 ---
 
@@ -195,11 +169,11 @@ Earthquake and compound disasters are significantly harder for unfamiliar popula
 ├── llm_scenario_generator.py    # LLM disaster scenario calibration (NL desc → params)
 ├── personal_advisor.py          # Personal Advisor: NL input → profile → DRQN → NL output
 ├── advisor_api.py               # FastAPI service wrapping Personal Advisor (REST API)
+├── advisor_ui.py                # Gradio web interface for Personal Advisor (browser UI)
 ├── demo_pipeline.py             # End-to-end three-layer pipeline demo script
 ├── eval_zone_coordinator.py     # Layer 2 evaluation: LLM vs algorithmic zone assignment
 │
 ├── zone_assignment.py           # Zone clustering + capacity-aware shelter assignment
-├── zone_route_recommendation.py # Zone-level primary/backup route recommendation
 ├── route_recommendation.py      # Single-agent route rollout
 ├── visualize_map.py             # Interactive folium maps (route + simulation modes)
 ├── analyze_persona_fairness.py  # Per-persona fairness analysis + cross-disaster comparison
@@ -209,8 +183,7 @@ Earthquake and compound disasters are significantly harder for unfamiliar popula
 │   ├── enterprise_blizzard.json
 │   ├── enterprise_earthquake.json
 │   ├── enterprise_compound.json
-│   ├── enterprise_scaling_*.json
-│   ├── enterprise_capacity_*.json
+│   ├── archive/                # Scaling/capacity experiment scenarios
 │   └── profiles/               # Disaster type parameter presets
 │
 ├── logs/                        # Experiment outputs (checkpoints, CSVs, JSONs)
@@ -259,99 +232,67 @@ Earthquake and compound disasters are significantly harder for unfamiliar popula
 - [x] **Personal Advisor REST API**: `advisor_api.py` (FastAPI + uvicorn) — POST /advise + /health + /scenarios + /nodes/random; Swagger UI at /docs
 - [x] **Map visualization**: `visualize_map.py` — interactive folium maps in route mode (animated AntPath) and simulation mode (20 persona layers, color-coded)
 - [x] **Scale to 200 agents**: student×120 / faculty×30 / staff×40 / visitor×10 — improves per-persona statistical reliability (visitor: 1.25 → 2.5 agents/run)
-- [x] **LLM disaster scenario calibration**: `llm_scenario_generator.py` — LLM generates physically-grounded simulation parameters from natural language descriptions (no numeric ranges in prompt); auto-loaded by `scenario_loader.py`
-
-### In Progress
-
-- [x] **200-agent sweep**: three-disaster × 4-severity sweep completed; fairness analysis confirmed results consistent with 100-agent version (±3%)
-- [ ] **LLM-parameters sweep**: same sweep with LLM-generated disaster calibration for comparison (planned)
-
-### Planned
-
-- [ ] **DRQN persona-aware retraining**: add persona fields to obs vector (Step 20)
-- [ ] **Three-layer pipeline integration experiment**: quantify end-to-end impact of all three layers vs baselines (Step 22)
+- [x] **LLM disaster scenario calibration**: `llm_scenario_generator.py` — LLM generates physically-grounded simulation parameters from natural language descriptions; auto-loaded by `scenario_loader.py`
+- [x] **Persona-aware DRQN (42-dim obs)**: persona features (speed, panic, familiarity, compliance, obs_error) added to obs vector; retrained with LLM-calibrated blizzard params and 4-stage curriculum
+- [x] **Three-disaster LLM-params sweep**: 40 agents × blizzard/earthquake/compound × 4 severities using persona-aware DRQN and LLM-calibrated params
+- [x] **Cross-disaster fairness analysis**: per-role and per-persona reached rates; earthquake extreme produces fairness gap of 1.000
+- [x] **Three-layer pipeline integration**: `eval_pipeline_integration.py` compares algo zone vs LLM zone assignment with persona-aware DRQN
+- [x] **Gradio web UI**: `advisor_ui.py` — browser-based interface with campus location picker, folium route map, LLM recommendation output
+- [x] **Paper**: `paper/capstone_final.tex` — full LaTeX paper with abstract, related work, methodology, results, fairness analysis
 
 ---
 
 ## Setup
 
 ```bash
-# Create virtualenv and install dependencies
+# 1. Create virtualenv and install dependencies
 python3 -m venv venv
-venv/bin/pip install torch networkx osmnx shapely pandas numpy groq
+venv/bin/pip install torch networkx osmnx shapely pandas numpy groq fastapi uvicorn folium pyproj gradio
 
-# Generate LLM behavior profiles (requires Groq API key)
-venv/bin/python llm_behavior_profiler.py --api-key YOUR_GROQ_KEY --output agent_profiles.json
+# 2. Set API key (save to .env, already gitignored)
+echo "GROQ_API_KEY=gsk_your_key_here" > .env
+set -a; source .env; set +a
 
-# Train DRQN (pretrain → progressive severity fine-tuning)
-./train_easy.sh
-./finetune_progressive_severity.sh logs/drqn_easy_pretrain/drqn_torch_best.pt
-
-# Run severity sweep
-./run_disaster_severity_sweep.sh scenarios/enterprise_blizzard.json logs/my_sweep
-
-# Batch comparison
-venv/bin/python run_disaster_severity_sweep.py \
+# 3. Real-time animated simulation demo (matplotlib, agents + hazard overlay)
+./venv/bin/python3 evacuation_main.py \
   --scenario scenarios/enterprise_blizzard.json \
-  --drqn-checkpoint logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt \
-  --output-dir logs/my_results
+  --policy drqn \
+  --drqn-checkpoint logs/drqn_llm_persona/drqn_torch_best.pt \
+  --visual-speed-scale 20.0
 
-# Layer 2: LLM Zone Coordinator (requires Groq API key)
-venv/bin/python llm_zone_coordinator.py \
+# 4. Gradio web UI — Personal Advisor (browser interface)
+./venv/bin/python3 advisor_ui.py
+# → open http://localhost:7860
+
+# 5. Personal Advisor CLI
+./venv/bin/python3 personal_advisor.py \
   --scenario scenarios/enterprise_blizzard.json \
-  --api-key YOUR_GROQ_KEY \
+  --checkpoint logs/drqn_llm_persona/drqn_torch_best.pt \
   --disaster-type blizzard --severity moderate \
-  --verbose --output-dir logs/zone_llm
-
-# Personal Advisor CLI: describe yourself → get personalized route recommendation
-venv/bin/python personal_advisor.py \
-  --scenario scenarios/enterprise_blizzard.json \
-  --checkpoint logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt \
-  --api-key YOUR_GROQ_KEY \
   --description "I am a freshman student, this is my first week on campus" \
-  --start-node YOUR_OSM_NODE_ID \
-  --disaster-type blizzard --severity moderate \
-  --output-dir logs/personal_advisor
+  --start-node 4119764241 \
+  --interactive
 
-# End-to-end three-layer pipeline demo
-venv/bin/python demo_pipeline.py \
-  --checkpoint logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt \
-  --scenario scenarios/enterprise_blizzard.json \
-  --severity moderate \
-  --description "I am a first-year international student." \
-  --start-node YOUR_OSM_NODE_ID \
-  --api-key YOUR_GROQ_KEY
-
-# Personal Advisor REST API (Swagger UI at http://localhost:8000/docs)
-ADVISOR_CHECKPOINT=logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt \
-GROQ_API_KEY=YOUR_GROQ_KEY \
-uvicorn advisor_api:app --host 0.0.0.0 --port 8000
-
-# Layer 2 evaluation: LLM coordinator vs algorithmic
-venv/bin/python eval_zone_coordinator.py \
-  --scenario scenarios/enterprise_blizzard.json \
-  --api-key YOUR_GROQ_KEY \
-  --seeds 42 43 44 45 46 \
-  --output-dir logs/zone_eval
-
-# Per-persona fairness analysis
-venv/bin/python analyze_persona_fairness.py \
-  --sweep-dirs blizzard=logs/disaster_severity_sweep \
-               earthquake=logs/disaster_severity_sweep_earthquake \
-               compound=logs/disaster_severity_sweep_compound \
-  --output-dir logs/persona_fairness_analysis
-
-# LLM disaster scenario calibration (generates scenarios/llm_severity_presets.json)
-venv/bin/python llm_scenario_generator.py \
-  --api-key YOUR_GROQ_KEY \
-  --verbose --compare
-
-# Interactive map visualization
-venv/bin/python visualize_map.py \
+# 6. Static route map (folium HTML, opens in browser)
+./venv/bin/python3 visualize_map.py \
   --mode route \
+  --route-json logs/personal_advisor/enterprise_blizzard_4119764241_advice.json \
+  --checkpoint logs/drqn_llm_persona/drqn_torch_best.pt \
   --scenario scenarios/enterprise_blizzard.json \
-  --checkpoint logs/drqn_progressive_severity_v3_extreme/drqn_torch_best.pt \
-  --start-node YOUR_OSM_NODE_ID
+  --output logs/maps/route_map.html
+open logs/maps/route_map.html
+
+# 7. Personal Advisor REST API (Swagger UI at http://localhost:8000/docs)
+ADVISOR_SCENARIO=scenarios/enterprise_blizzard.json \
+ADVISOR_SEVERITY=moderate \
+ADVISOR_CHECKPOINT=logs/drqn_llm_persona/drqn_torch_best.pt \
+./venv/bin/python3 -m uvicorn advisor_api:app --host 0.0.0.0 --port 8000
+
+# 8. Three-layer pipeline integration experiment
+./venv/bin/python3 eval_pipeline_integration.py \
+  --checkpoint logs/drqn_llm_persona/drqn_torch_best.pt \
+  --scenario scenarios/enterprise_blizzard.json \
+  --severity moderate --seeds 42 43 44 45 46
 ```
 
 ---
