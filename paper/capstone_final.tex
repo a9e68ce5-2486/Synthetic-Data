@@ -23,7 +23,7 @@ Under Dynamic Disaster Conditions}\\[0.4em]
 \maketitle
 
 \onehalfspacing
-
+ 
 % ─────────────────────────────────────────────
 \section{Introduction and Motivation}
 
@@ -146,7 +146,7 @@ Training uses Double DQN~\cite{vanHasselt2016} target updates, a sequence replay
 
 \subsection{Baseline vs.\ DRQN under Blizzard}
 
-Table~\ref{tab:baseline_vs_drqn} compares heuristic policies and DRQN under blizzard conditions across severity levels (40 agents, 20 runs each). Round Robin and Nearest Shelter numbers are from the baseline scenario evaluation; DRQN results are from the blizzard severity sweep.
+Table~\ref{tab:baseline_vs_drqn} compares heuristic policies and DRQN under blizzard conditions across severity levels (40 agents, 20 runs each). All policies are evaluated under the same blizzard scenario conditions.
 
 \begin{table}[h]
 \centering
@@ -157,10 +157,10 @@ Table~\ref{tab:baseline_vs_drqn} compares heuristic policies and DRQN under bliz
 \textbf{Scenario} & \textbf{Round Robin} & \textbf{Nearest} & \textbf{DRQN (prev.)} & \textbf{DRQN (persona-aware)} \\
 \midrule
 Baseline (no disaster) & 0.265 & 0.291 & 0.963 & -- \\
-Blizzard Light    & --    & --    & 0.845 & \textbf{0.790} \\
-Blizzard Moderate & --    & --    & 0.752 & \textbf{0.724} \\
-Blizzard Severe   & --    & --    & 0.640 & \textbf{0.678} \\
-Blizzard Extreme  & --    & --    & 0.519 & \textbf{0.545} \\
+Blizzard Light    & 0.058 & 0.173 & 0.845 & \textbf{0.790} \\
+Blizzard Moderate & 0.022 & 0.100 & 0.752 & \textbf{0.724} \\
+Blizzard Severe   & 0.012 & 0.061 & 0.640 & \textbf{0.678} \\
+Blizzard Extreme  & 0.010 & 0.031 & 0.519 & \textbf{0.545} \\
 \bottomrule
 \end{tabular}
 \end{table}
