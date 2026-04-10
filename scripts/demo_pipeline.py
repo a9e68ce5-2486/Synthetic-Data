@@ -1,3 +1,4 @@
+import sys, os; sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 """
 demo_pipeline.py — End-to-end three-layer pipeline demo
 
