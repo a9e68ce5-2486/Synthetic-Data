@@ -115,10 +115,10 @@ DRQN achieves **71×** reached_rate vs round_robin at extreme blizzard.
 
 Earthquake produces large staff/visitor asymmetry: staff navigate effectively even with 80% initial blockage; visitors fail catastrophically due to low familiarity and high observation error. Results are highly consistent with 40-agent runs (Δ ≤ 0.02 across all conditions).
 
-### Per-Persona Fairness (blizzard extreme)
+### Per-Persona Fairness (200 agents, cross-disaster)
 
-Most vulnerable: research_scientist (0.318), conference_attendee (0.389), part_time_student (0.396).  
-Fairness gap: **0.557** at blizzard extreme, up to **1.000** at earthquake extreme (campus_security: 1.000 vs mobility_impaired: 0.000).
+Most vulnerable at blizzard extreme: adjunct_instructor (0.279), international_student (0.372), conference_attendee (0.389).  
+Fairness gap: **0.397** at blizzard extreme, **0.938** at earthquake extreme (campus_security: 1.000 vs conference_attendee: 0.062), **0.894** at compound extreme (campus_security: 0.889 vs mobility_impaired: 0.000).
 
 ### Three-Layer Pipeline Integration (blizzard moderate, 5 seeds)
 
