@@ -57,6 +57,18 @@ case "$1" in
     $PYTHON -m uvicorn advisor_api:app --host 0.0.0.0 --port 8000
     ;;
 
+  sweep)
+    # 200-agent sweep across all 3 disasters × 4 severities
+    CKPT=$CHECKPOINT
+    for DISASTER in blizzard earthquake compound; do
+      $PYTHON scripts/run_disaster_severity_sweep.py \
+        --scenario scenarios/enterprise_${DISASTER}.json \
+        --drqn-checkpoint $CKPT \
+        --output-dir logs/sweep_200ped/${DISASTER} \
+        --ped-count 200
+    done
+    ;;
+
   *)
     echo ""
     echo "Usage: ./run.sh <command> [option]"
@@ -66,6 +78,7 @@ case "$1" in
     echo "  advise                               Personal Advisor CLI (interactive)"
     echo "  map                                  Static route map (opens in browser)"
     echo "  api                                  REST API server → http://localhost:8000/docs"
+    echo "  sweep                                200-agent sweep (3 disasters × 4 severities)"
     echo ""
     ;;
 esac

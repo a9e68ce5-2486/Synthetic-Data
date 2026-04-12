@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--policies", nargs="+", default=["drqn"])
     parser.add_argument("--num-runs", type=int, default=None)
     parser.add_argument("--base-seed", type=int, default=None)
+    parser.add_argument("--ped-count", type=int, default=None, help="Override EVAC_PED_COUNT")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -37,6 +38,8 @@ def main():
             scenario["num_runs"] = int(args.num_runs)
         if args.base_seed is not None:
             scenario["base_seed"] = int(args.base_seed)
+        if args.ped_count is not None:
+            scenario["config_overrides"]["EVAC_PED_COUNT"] = int(args.ped_count)
         scenario = _apply_disaster_rules(scenario)
 
         scenario_out_dir = os.path.join(args.output_dir, scenario["name"])
