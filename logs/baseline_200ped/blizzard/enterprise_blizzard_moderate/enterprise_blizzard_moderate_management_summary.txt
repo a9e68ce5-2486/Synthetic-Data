@@ -1,0 +1,10 @@
+Management Summary
+Scenario: enterprise_blizzard_moderate
+Baseline Policy: round_robin
+
+For scenario 'enterprise_blizzard_moderate', best policy is 'drqn': reached rate improvement vs 'round_robin' = 79200.0%, exposure improvement = -41.6%, T95 not available.
+
+Policy Snapshot:
+- round_robin: runs=20, avg_reached_rate=0.0009, avg_alive_rate=1.0, avg_exposure_total=43.0017, avg_t95_step=None
+- nearest: runs=20, avg_reached_rate=0.0046, avg_alive_rate=1.0, avg_exposure_total=37.3086, avg_t95_step=None
+- drqn: runs=20, avg_reached_rate=0.7137, avg_alive_rate=1.0, avg_exposure_total=73.6556, avg_t95_step=None

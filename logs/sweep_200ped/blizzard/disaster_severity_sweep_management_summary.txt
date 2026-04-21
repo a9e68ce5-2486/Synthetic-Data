@@ -1,0 +1,9 @@
+Disaster Severity Sweep Management Summary
+Base scenario: scenarios/enterprise_blizzard.json
+Policies: ['drqn']
+
+Ordered by severity:
+- light / drqn: reached=0.7873, exposure=33.79, t95=None, reassignments=0.0
+- moderate / drqn: reached=0.7146, exposure=62.2855, t95=None, reassignments=0.0
+- severe / drqn: reached=0.6764, exposure=84.7528, t95=None, reassignments=0.0
+- extreme / drqn: reached=0.5264, exposure=68.9179, t95=None, reassignments=0.0

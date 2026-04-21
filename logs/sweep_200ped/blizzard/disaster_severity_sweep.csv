@@ -1,0 +1,5 @@
+scenario,disaster_type,severity,policy,runs,avg_reached_rate,avg_alive_rate,avg_exposure_total,avg_t90_step,avg_t95_step,avg_reach_rate_gap,avg_shelter_reassignments,avg_faculty_reached_rate,avg_staff_reached_rate
+enterprise_blizzard,blizzard,light,drqn,20,0.7873,1.0,33.79,,,-0.0317,0.0,0.8509,0.8826
+enterprise_blizzard,blizzard,moderate,drqn,20,0.7146,1.0,62.2855,,,-0.0091,0.0,0.7523,0.7614
+enterprise_blizzard,blizzard,severe,drqn,20,0.6764,1.0,84.7528,,,0.0636,0.0,0.7073,0.6437
+enterprise_blizzard,blizzard,extreme,drqn,20,0.5264,1.0,68.9179,,,0.023,0.0,0.5885,0.5655

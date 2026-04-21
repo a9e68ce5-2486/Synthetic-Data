@@ -118,16 +118,20 @@ Earthquake produces large staff/visitor asymmetry: staff navigate effectively ev
 ### Per-Persona Fairness (200 agents, cross-disaster)
 
 Most vulnerable at blizzard extreme: adjunct_instructor (0.279), international_student (0.372), conference_attendee (0.389).  
-Fairness gap: **0.397** at blizzard extreme, **0.938** at earthquake extreme (campus_security: 1.000 vs conference_attendee: 0.062), **0.894** at compound extreme (campus_security: 0.889 vs mobility_impaired: 0.000).
+Fairness gap: **0.397** at blizzard extreme, **0.938** at earthquake extreme (campus_security: 1.000 vs conference_attendee: 0.062), **0.806** at compound extreme (campus_security: 0.889 vs prospective_student_with_parent: 0.083).
 
-### Three-Layer Pipeline Integration (blizzard moderate, 5 seeds)
+### Three-Layer Pipeline Integration (moderate severity, 5 seeds each, live Groq API)
 
-| Config | Description | Reached Rate | Avg Exposure |
-|--------|-------------|-------------|--------------|
-| B | Algo zone + persona DRQN (Layer 1+3) | 0.713 | 71.6 |
-| C | LLM zone + persona DRQN (Layer 1+2+3) | 0.691 | 262.0 |
+| Disaster | Config | Reached Rate | Avg Exposure | ΔReached | Exp. Ratio |
+|----------|--------|-------------|--------------|---------|------------|
+| Blizzard | B (algo zone) | **0.713** | 71.6 | -0.022 | — |
+| Blizzard | C (LLM zone) | 0.691 | 262.0 | | 3.7× |
+| Compound | B (algo zone) | 0.345 | 60.9 | +0.033 | — |
+| Compound | C (LLM zone) | **0.378** | 602.0 | | 9.9× |
+| Earthquake | B (algo zone) | **0.418** | 71.8 | -0.102 | — |
+| Earthquake | C (LLM zone) | 0.316 | 729.4 | | 10.2× |
 
-Per-role breakdown reveals the key difference:
+Blizzard per-role breakdown reveals the fairness effect:
 
 | Role | Config B (algo zone) | Config C (LLM zone) |
 |------|---------------------|---------------------|
@@ -135,7 +139,12 @@ Per-role breakdown reveals the key difference:
 | Faculty | 0.733 | **0.950** |
 | Student | 0.000 | **0.950** |
 
-Layer 2 (LLM zone coordinator) trades 2.2% overall throughput for a dramatic fairness improvement: the algorithmic assignment leaves students completely unserved (0.000), while the LLM balances all roles above 95%. The higher exposure reflects the LLM routing agents to further but less congested shelters. Layer 2's value is **role-level equity**, not raw throughput.
+Layer 2 effectiveness is **disaster-type dependent**:
+- **Blizzard**: trades 2.2% throughput for large fairness gain (student 0.000→0.950). LLM's strength.
+- **Compound**: marginal +3.3% gain but 9.9× exposure increase.
+- **Earthquake**: degrades throughput by 10.2%. LLM routes agents to distant shelters without accounting for 80% initial road blockage — catastrophic failure in worst seeds (reached=0.000).
+
+The earthquake failure reveals a fundamental Layer 2 limitation: the LLM reasons over shelter capacity and population composition but lacks blockage-path feasibility awareness. A hybrid fallback when blockage probability is high would be needed for robustness.
 
 ---
 

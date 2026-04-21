@@ -1,0 +1,13 @@
+scenario,disaster_type,severity,policy,runs,avg_reached_rate,avg_alive_rate,avg_exposure_total,avg_t90_step,avg_t95_step,avg_reach_rate_gap,avg_shelter_reassignments,avg_faculty_reached_rate,avg_staff_reached_rate
+enterprise_blizzard,blizzard,light,round_robin,20,0.0373,1.0,295.1181,,,0.0106,0.0,0.0737,0.0631
+enterprise_blizzard,blizzard,light,nearest,20,0.0745,1.0,291.6362,,,-0.0338,0.0,0.1106,0.1444
+enterprise_blizzard,blizzard,light,drqn,20,0.7891,1.0,37.3429,,,-0.0724,0.0,0.8151,0.8875
+enterprise_blizzard,blizzard,moderate,round_robin,20,0.0009,1.0,43.0017,,,0.0,0.0,0.0,0.0
+enterprise_blizzard,blizzard,moderate,nearest,20,0.0046,1.0,37.3086,,,-0.0054,0.0,0.0063,0.0116
+enterprise_blizzard,blizzard,moderate,drqn,20,0.7137,1.0,73.6556,,,-0.0216,0.0,0.7377,0.7593
+enterprise_blizzard,blizzard,severe,round_robin,20,0.0073,1.0,64.8094,,,0.0,0.0,0.0,0.0
+enterprise_blizzard,blizzard,severe,nearest,20,0.0227,1.0,79.7534,,,-0.0054,0.0,0.0063,0.0116
+enterprise_blizzard,blizzard,severe,drqn,20,0.6718,1.0,91.653,,,0.0183,0.0,0.6465,0.6283
+enterprise_blizzard,blizzard,extreme,round_robin,20,0.0145,1.0,77.0643,,,-0.0078,0.0,0.0038,0.0117
+enterprise_blizzard,blizzard,extreme,nearest,20,0.0191,1.0,51.9424,,,-0.0198,0.0,0.0038,0.0236
+enterprise_blizzard,blizzard,extreme,drqn,20,0.5191,1.0,63.7693,,,0.0229,0.0,0.5951,0.5722

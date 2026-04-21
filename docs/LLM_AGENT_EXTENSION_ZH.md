@@ -279,14 +279,18 @@ LLM 接收自然語言環境反饋（成功偵測器、場景描述、人工修�
 | Layer 2 | LLM Zone Coordinator (ReAct) | 語意驅動的 zone-level shelter 分配 |
 | Layer 3 | DRQN on OSM graph | 部分觀察環境下的個體逐步導航 |
 
-**Layer 2 實驗結果（blizzard moderate，5 seeds，live Groq API）**：
+**Layer 2 跨災害實驗結果（moderate severity，5 seeds，live Groq API）**：
 
-| Config | 描述 | Reached Rate | Avg Exposure |
-|--------|------|-------------|--------------|
-| B | Algo zone + persona DRQN (Layer 1+3) | 0.713 | 71.6 |
-| C | LLM zone + persona DRQN (Layer 1+2+3) | 0.691 | 262.0 |
+| Disaster | Config | Reached | Exposure | ΔReached | Exp Ratio |
+|----------|--------|---------|----------|---------|-----------|
+| Blizzard | B (algo) | **0.713** | 71.6 | -0.022 | — |
+| Blizzard | C (LLM)  | 0.691 | 262.0 | | 3.7× |
+| Compound | B (algo) | 0.345 | 60.9 | +0.033 | — |
+| Compound | C (LLM)  | **0.378** | 602.0 | | 9.9× |
+| Earthquake | B (algo) | **0.418** | 71.8 | -0.102 | — |
+| Earthquake | C (LLM)  | 0.316 | 729.4 | | 10.2× |
 
-Per-role breakdown：
+Blizzard per-role breakdown：
 
 | Role | Config B | Config C |
 |------|---------|---------|
@@ -294,7 +298,13 @@ Per-role breakdown：
 | Faculty | 0.733 | **0.950** |
 | Student | 0.000 | **0.950** |
 
-**關鍵發現**：Layer 2 的 LLM zone coordinator 整體 reached_rate 下降 2.2%，但公平性大幅提升。演算法分配完全忽視 student（reached = 0.000），而 LLM 透過語意推理將各 role 均衡分配至適合的 shelter，三組皆達 95% 以上。代價是 exposure 上升（LLM 傾向把人引導至較遠但低壅塞的 shelter）。Layer 2 的核心貢獻是 **role-level equity**，而非整體吞吐量最大化。
+**關鍵發現**：Layer 2 的效果高度依賴災害類型：
+
+- **Blizzard**：LLM 犧牲 2.2% 吞吐量換取大幅公平性提升（student 0.000→0.950），所有 role 均超過 95%。LLM 的核心優勢。
+- **Compound**：微小正效益（+3.3%），但 exposure 代價是 9.9 倍。
+- **Earthquake**：吞吐量下降 10.2%（0.418→0.316）。LLM 將 agents 路由至遠處的 shelter，卻沒有考慮 80% 初始封路的現實，最壞 seed（seed 46）出現 reached=0.000、exposure=1431 的災難性失敗。
+
+**根本問題**：LLM zone coordinator 能推理 shelter 容量與人口組成，但缺乏「封路後路徑可達性」的評估能力。在高封路概率情境下，需要加入 blockage-threshold fallback 機制才能確保穩健性。
 
 **Related work 定位**：
 

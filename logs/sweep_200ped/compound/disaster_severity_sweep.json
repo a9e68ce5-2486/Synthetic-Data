@@ -1,0 +1,79 @@
+{
+  "base_scenario": "scenarios/enterprise_compound.json",
+  "drqn_checkpoint": "logs/drqn_llm_persona/drqn_torch_best.pt",
+  "severity_levels": [
+    "light",
+    "moderate",
+    "severe",
+    "extreme"
+  ],
+  "policies": [
+    "drqn"
+  ],
+  "rows": [
+    {
+      "scenario": "enterprise_compound",
+      "disaster_type": "compound",
+      "severity": "light",
+      "policy": "drqn",
+      "runs": 20,
+      "avg_reached_rate": 0.6255,
+      "avg_alive_rate": 1.0,
+      "avg_exposure_total": 72.4214,
+      "avg_t90_step": null,
+      "avg_t95_step": null,
+      "avg_reach_rate_gap": -0.0248,
+      "avg_shelter_reassignments": 0.0,
+      "avg_faculty_reached_rate": 0.6706,
+      "avg_staff_reached_rate": 0.6954
+    },
+    {
+      "scenario": "enterprise_compound",
+      "disaster_type": "compound",
+      "severity": "moderate",
+      "policy": "drqn",
+      "runs": 20,
+      "avg_reached_rate": 0.3682,
+      "avg_alive_rate": 1.0,
+      "avg_exposure_total": 62.6089,
+      "avg_t90_step": null,
+      "avg_t95_step": null,
+      "avg_reach_rate_gap": -0.1859,
+      "avg_shelter_reassignments": 0.0,
+      "avg_faculty_reached_rate": 0.3405,
+      "avg_staff_reached_rate": 0.5264
+    },
+    {
+      "scenario": "enterprise_compound",
+      "disaster_type": "compound",
+      "severity": "severe",
+      "policy": "drqn",
+      "runs": 20,
+      "avg_reached_rate": 0.34,
+      "avg_alive_rate": 1.0,
+      "avg_exposure_total": 58.9911,
+      "avg_t90_step": null,
+      "avg_t95_step": null,
+      "avg_reach_rate_gap": -0.0556,
+      "avg_shelter_reassignments": 0.0,
+      "avg_faculty_reached_rate": 0.4686,
+      "avg_staff_reached_rate": 0.5242
+    },
+    {
+      "scenario": "enterprise_compound",
+      "disaster_type": "compound",
+      "severity": "extreme",
+      "policy": "drqn",
+      "runs": 20,
+      "avg_reached_rate": 0.4236,
+      "avg_alive_rate": 1.0,
+      "avg_exposure_total": 33.7343,
+      "avg_t90_step": null,
+      "avg_t95_step": null,
+      "avg_reach_rate_gap": -0.1618,
+      "avg_shelter_reassignments": 0.0,
+      "avg_faculty_reached_rate": 0.5365,
+      "avg_staff_reached_rate": 0.6983
+    }
+  ]
+}

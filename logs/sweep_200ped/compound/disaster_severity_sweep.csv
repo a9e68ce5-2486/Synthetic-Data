@@ -1,0 +1,5 @@
+scenario,disaster_type,severity,policy,runs,avg_reached_rate,avg_alive_rate,avg_exposure_total,avg_t90_step,avg_t95_step,avg_reach_rate_gap,avg_shelter_reassignments,avg_faculty_reached_rate,avg_staff_reached_rate
+enterprise_compound,compound,light,drqn,20,0.6255,1.0,72.4214,,,-0.0248,0.0,0.6706,0.6954
+enterprise_compound,compound,moderate,drqn,20,0.3682,1.0,62.6089,,,-0.1859,0.0,0.3405,0.5264
+enterprise_compound,compound,severe,drqn,20,0.34,1.0,58.9911,,,-0.0556,0.0,0.4686,0.5242
+enterprise_compound,compound,extreme,drqn,20,0.4236,1.0,33.7343,,,-0.1618,0.0,0.5365,0.6983

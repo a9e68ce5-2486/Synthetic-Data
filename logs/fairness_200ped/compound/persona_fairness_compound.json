@@ -1,0 +1,157 @@
+{
+  "disaster": "compound",
+  "persona_reached_rates": {
+    "adjunct_instructor": {
+      "light": 0.6324,
+      "moderate": 0.2157,
+      "severe": 0.1974,
+      "extreme": 0.1309
+    },
+    "campus_security": {
+      "light": 0.7738,
+      "moderate": 0.7738,
+      "severe": 0.8939,
+      "extreme": 0.8889
+    },
+    "conference_attendee": {
+      "light": 0.2778,
+      "moderate": 0.2778,
+      "severe": 0.3333,
+      "extreme": 0.1667
+    },
+    "facilities_staff": {
+      "light": 0.7511,
+      "moderate": 0.5232,
+      "severe": 0.5412,
+      "extreme": 0.8179
+    },
+    "freshman_student": {
+      "light": 0.6333,
+      "moderate": 0.3082,
+      "severe": 0.1829,
+      "extreme": 0.1795
+    },
+    "graduate_student": {
+      "light": 0.6996,
+      "moderate": 0.3886,
+      "severe": 0.4692,
+      "extreme": 0.6246
+    },
+    "healthcare_staff": {
+      "light": 0.7059,
+      "moderate": 0.5206,
+      "severe": 0.5781,
+      "extreme": 0.6431
+    },
+    "international_student": {
+      "light": 0.5392,
+      "moderate": 0.3041,
+      "severe": 0.1009,
+      "extreme": 0.2474
+    },
+    "it_staff": {
+      "light": 0.5758,
+      "moderate": 0.5476,
+      "severe": 0.5,
+      "extreme": 0.75
+    },
+    "junior_faculty": {
+      "light": 0.7111,
+      "moderate": 0.2456,
+      "severe": 0.5283,
+      "extreme": 0.5208
+    },
+    "mobility_impaired": {
+      "light": 0.75,
+      "moderate": 0.3,
+      "severe": 0.0,
+      "extreme": 0.1481
+    },
+    "part_time_student": {
+      "light": 0.401,
+      "moderate": 0.25,
+      "severe": 0.125,
+      "extreme": 0.3235
+    },
+    "prospective_student_with_parent": {
+      "light": 0.25,
+      "moderate": 0.05,
+      "severe": 0.0,
+      "extreme": 0.0833
+    },
+    "research_scientist": {
+      "light": 0.4479,
+      "moderate": 0.2685,
+      "severe": 0.2292,
+      "extreme": 0.2281
+    },
+    "senior_faculty": {
+      "light": 0.6864,
+      "moderate": 0.4132,
+      "severe": 0.5491,
+      "extreme": 0.6337
+    },
+    "staff_admin": {
+      "light": 0.7179,
+      "moderate": 0.4889,
+      "severe": 0.5831,
+      "extreme": 0.8278
+    },
+    "student_athlete": {
+      "light": 0.8021,
+      "moderate": 0.3383,
+      "severe": 0.3324,
+      "extreme": 0.4556
+    },
+    "student_with_anxiety": {
+      "light": 0.3725,
+      "moderate": 0.2917,
+      "severe": 0.2757,
+      "extreme": 0.1531
+    },
+    "visitor": {
+      "light": 0.7308,
+      "moderate": 0.3889,
+      "severe": 0.2273,
+      "extreme": 0.1667
+    },
+    "young_student": {
+      "light": 0.565,
+      "moderate": 0.3391,
+      "severe": 0.2411,
+      "extreme": 0.3036
+    }
+  },
+  "role_reached_rates": {
+    "student": {
+      "light": 0.5905,
+      "moderate": 0.3339,
+      "severe": 0.262,
+      "extreme": 0.3303
+    },
+    "faculty": {
+      "light": 0.6706,
+      "moderate": 0.3405,
+      "severe": 0.4686,
+      "extreme": 0.5365
+    },
+    "staff": {
+      "light": 0.6954,
+      "moderate": 0.5264,
+      "severe": 0.5242,
+      "extreme": 0.6983
+    },
+    "visitor": {
+      "light": 0.4807,
+      "moderate": 0.3157,
+      "severe": 0.1833,
+      "extreme": 0.1403
+    }
+  },
+  "overall": {
+    "light": 0.6255,
+    "moderate": 0.3682,
+    "severe": 0.34,
+    "extreme": 0.4236
+  }
+}

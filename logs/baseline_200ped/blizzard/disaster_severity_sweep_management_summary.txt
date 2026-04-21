@@ -1,0 +1,17 @@
+Disaster Severity Sweep Management Summary
+Base scenario: scenarios/enterprise_blizzard.json
+Policies: ['round_robin', 'nearest', 'drqn']
+
+Ordered by severity:
+- light / round_robin: reached=0.0373, exposure=295.1181, t95=None, reassignments=0.0
+- light / nearest: reached=0.0745, exposure=291.6362, t95=None, reassignments=0.0
+- light / drqn: reached=0.7891, exposure=37.3429, t95=None, reassignments=0.0
+- moderate / round_robin: reached=0.0009, exposure=43.0017, t95=None, reassignments=0.0
+- moderate / nearest: reached=0.0046, exposure=37.3086, t95=None, reassignments=0.0
+- moderate / drqn: reached=0.7137, exposure=73.6556, t95=None, reassignments=0.0
+- severe / round_robin: reached=0.0073, exposure=64.8094, t95=None, reassignments=0.0
+- severe / nearest: reached=0.0227, exposure=79.7534, t95=None, reassignments=0.0
+- severe / drqn: reached=0.6718, exposure=91.653, t95=None, reassignments=0.0
+- extreme / round_robin: reached=0.0145, exposure=77.0643, t95=None, reassignments=0.0
+- extreme / nearest: reached=0.0191, exposure=51.9424, t95=None, reassignments=0.0
+- extreme / drqn: reached=0.5191, exposure=63.7693, t95=None, reassignments=0.0

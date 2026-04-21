@@ -1,0 +1,9 @@
+Disaster Severity Sweep Management Summary
+Base scenario: scenarios/enterprise_compound.json
+Policies: ['drqn']
+
+Ordered by severity:
+- light / drqn: reached=0.6255, exposure=72.4214, t95=None, reassignments=0.0
+- moderate / drqn: reached=0.3682, exposure=62.6089, t95=None, reassignments=0.0
+- severe / drqn: reached=0.34, exposure=58.9911, t95=None, reassignments=0.0
+- extreme / drqn: reached=0.4236, exposure=33.7343, t95=None, reassignments=0.0

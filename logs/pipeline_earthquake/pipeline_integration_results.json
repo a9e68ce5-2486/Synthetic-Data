@@ -1,0 +1,119 @@
+{
+  "scenario": "scenarios/enterprise_earthquake.json",
+  "severity": "moderate",
+  "checkpoint": "logs/drqn_llm_persona/drqn_torch_best.pt",
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "llm_api_used": true,
+  "context_from_full_sweep": {
+    "blizzard_moderate_20runs": 0.724,
+    "source": "logs/llm_persona_sweep_blizzard/disaster_severity_sweep.json"
+  },
+  "configs": {
+    "B": {
+      "desc": "Algo zone + persona obs (Layer 1+3)",
+      "rows": [
+        {
+          "reached_rate": 0.4364,
+          "exposure_total": 64.9954,
+          "ped_reached_rate": 0.0,
+          "staff_reached_rate": 0.7273,
+          "faculty_reached_rate": 0.5556
+        },
+        {
+          "reached_rate": 0.3455,
+          "exposure_total": 71.2812,
+          "ped_reached_rate": 0.0,
+          "staff_reached_rate": 0.6,
+          "faculty_reached_rate": 0.0
+        },
+        {
+          "reached_rate": 0.4364,
+          "exposure_total": 95.9888,
+          "ped_reached_rate": 0.0,
+          "staff_reached_rate": 0.75,
+          "faculty_reached_rate": 0.3
+        },
+        {
+          "reached_rate": 0.4,
+          "exposure_total": 41.7977,
+          "ped_reached_rate": 0.0,
+          "staff_reached_rate": 0.6429,
+          "faculty_reached_rate": 0.375
+        },
+        {
+          "reached_rate": 0.4727,
+          "exposure_total": 84.9647,
+          "ped_reached_rate": 0.0,
+          "staff_reached_rate": 1.0,
+          "faculty_reached_rate": 0.7273
+        }
+      ],
+      "agg": {
+        "reached_rate": 0.4182,
+        "exposure_total": 71.80556,
+        "staff_reached_rate": 0.74404,
+        "faculty_reached_rate": 0.39158
+      }
+    },
+    "C": {
+      "desc": "LLM zone + persona obs (Layer 1+2+3)",
+      "rows": [
+        {
+          "reached_rate": 0.5636363636363636,
+          "exposure_total": 394.5753700740063,
+          "ped_reached_rate": 0.775,
+          "staff_reached_rate": 0.8888888888888888,
+          "faculty_reached_rate": 0.8571428571428571,
+          "llm_source": "llm"
+        },
+        {
+          "reached_rate": 0.4727272727272727,
+          "exposure_total": 257.8352021927978,
+          "ped_reached_rate": 0.65,
+          "staff_reached_rate": 0.5714285714285714,
+          "faculty_reached_rate": 1.0,
+          "llm_source": "llm"
+        },
+        {
+          "reached_rate": 0.03636363636363636,
+          "exposure_total": 1466.0021812843793,
+          "ped_reached_rate": 0.05,
+          "staff_reached_rate": 0.1,
+          "faculty_reached_rate": 0.0,
+          "llm_source": "llm"
+        },
+        {
+          "reached_rate": 0.509090909090909,
+          "exposure_total": 97.50784603941035,
+          "ped_reached_rate": 0.7,
+          "staff_reached_rate": 0.75,
+          "faculty_reached_rate": 0.8,
+          "llm_source": "llm"
+        },
+        {
+          "reached_rate": 0.0,
+          "exposure_total": 1431.3241279182312,
+          "ped_reached_rate": 0.0,
+          "staff_reached_rate": 0.0,
+          "faculty_reached_rate": 0.0,
+          "llm_source": "llm"
+        }
+      ],
+      "agg": {
+        "reached_rate": 0.31636363636363635,
+        "exposure_total": 729.4489455017649,
+        "staff_reached_rate": 0.462063492063492,
+        "faculty_reached_rate": 0.5314285714285715
+      }
+    }
+  },
+  "deltas": {
+    "layer_2_marginal_c_vs_b": -0.10183636363636367
+  }
+}
